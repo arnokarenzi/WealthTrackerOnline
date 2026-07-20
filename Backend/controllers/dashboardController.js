@@ -46,14 +46,13 @@ export const getDashboard = async (req, res) => {
     const liveSalary = n(b.translatedLetters) * RATE_PER_LETTER;
     const liveIncome = liveSalary + n(b.otherIncome);
 
-    // WALLET BALANCE RULE: Wallet balance remains 0 until resetMonth rolls over expected funds
-    const liveBalance = 0;
+    // Read actual liquid wallet balance from database (updated via reset rollover & expenses)
+    const liveBalance = n(b.balance);
 
-    // Update expected salary in DB, but keep wallet balance at 0 until reset
-    await pool.query(
-      "UPDATE MonthlyBudget SET salary = ?, balance = ? WHERE id = 1",
-      [liveSalary, liveBalance],
-    );
+    // Update expected salary in DB, leaving wallet balance untouched
+    await pool.query("UPDATE MonthlyBudget SET salary = ? WHERE id = 1", [
+      liveSalary,
+    ]);
 
     const plannedEssentials =
       n(b.rent) +
@@ -146,8 +145,6 @@ export const getDashboard = async (req, res) => {
     const investRatio =
       liveIncome > 0 ? (effectiveInvestmentVal / liveIncome) * 100 : 0;
 
-    const disciplineMargin = liveIncome > 0 ? 0 : 0;
-
     let score = 0;
     score += (efCompletionPct / 100) * 40;
     score += Math.min((investRatio / 20) * 30, 30);
@@ -201,9 +198,9 @@ export const updateLetters = async (req, res) => {
 
     const newSalary = currentTotal * RATE_PER_LETTER;
 
-    // Updates expected salary target, but keeps wallet balance at 0 until reset
+    // Updates expected salary target, leaving balance untouched
     await pool.query(
-      "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ?, balance = 0 WHERE id = 1",
+      "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ? WHERE id = 1",
       [currentTotal, currentShift, newSalary],
     );
     res.json({ success: true });
@@ -219,8 +216,7 @@ export const resetShift = async (req, res) => {
       UPDATE MonthlyBudget 
       SET shiftLetters = 0, 
           translatedLetters = 0, 
-          salary = 0,
-          balance = 0 
+          salary = 0 
       WHERE id = 1
     `);
 
@@ -264,12 +260,10 @@ export const updateMonthlyBudget = async (req, res) => {
       }
     }
 
-    // Wallet balance strictly stays 0 until month reset
-    const balance = 0;
-
+    // Budget updates are placeholders; preserve current wallet balance
     const sql = `UPDATE MonthlyBudget SET 
       salary=?, otherIncome=?, rent=?, schoolSaving=?, phoneInternet=?, electricityWater=?, 
-      food=?, miscellaneous=?, medical=?, familySupport=?, emergencyFund=?, investment=?, balance=? 
+      food=?, miscellaneous=?, medical=?, familySupport=?, emergencyFund=?, investment=?
       WHERE id=?`;
 
     await pool.query(sql, [
@@ -285,7 +279,6 @@ export const updateMonthlyBudget = async (req, res) => {
       n(current.familySupport),
       n(current.emergencyFund),
       finalInvestment,
-      balance,
       id,
     ]);
 
