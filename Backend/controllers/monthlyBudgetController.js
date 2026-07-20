@@ -140,7 +140,7 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // Keep savings goal progress markers synchronized (Corrected to SavingsGoals)
+      // Keep savings goal progress markers synchronized (Using actual column currentAmount)
       const goalsToUpdate = [
         { amount: schoolFeesSaving, name: "School Fees Buffer" },
         { amount: emergencySaving, name: "Emergency Fund" },
@@ -151,14 +151,7 @@ export const resetMonth = async (req, res) => {
         if (goal.amount > 0) {
           await connection.query(
             `UPDATE SavingsGoals
-             SET currentSaved = (@new := currentSaved + ?),
-                 remaining = targetAmount - @new,
-                 progress = LEAST(GREATEST((@new / targetAmount) * 100, 0), 100),
-                 status = CASE
-                   WHEN (@new / targetAmount) * 100 >= 100 THEN 'Completed'
-                   WHEN (@new / targetAmount) * 100 < 25 THEN 'Below 25% progress'
-                   ELSE 'In progress'
-                 END
+             SET currentAmount = currentAmount + ?
              WHERE goalName = ?`,
             [goal.amount, goal.name],
           );

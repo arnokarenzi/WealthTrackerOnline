@@ -1,4 +1,5 @@
 import SchoolFees from "../models/SchoolFees.js";
+import { pool } from "../models/MonthlyBudget.js";
 
 export const getFeesHistory = async (req, res) => {
   try {
@@ -9,8 +10,6 @@ export const getFeesHistory = async (req, res) => {
   }
 };
 
-import { pool } from "../models/MonthlyBudget.js";
-
 export const resetSchoolFeesOnly = async (req, res) => {
   const connection = await pool.getConnection();
   try {
@@ -19,13 +18,10 @@ export const resetSchoolFeesOnly = async (req, res) => {
     // 1. Clear the School Fees history table
     await connection.query("DELETE FROM SchoolFees");
 
-    // 2. Reset only the School Fees Buffer goal in the SavingsGoals table (Corrected to SavingsGoals)
+    // 2. Reset only the School Fees Buffer goal using the correct currentAmount column
     await connection.query(`
       UPDATE SavingsGoals 
-      SET currentSaved = 0, 
-          remaining = targetAmount, 
-          progress = 0, 
-          status = 'In progress'
+      SET currentAmount = 0 
       WHERE goalName = 'School Fees Buffer'
     `);
 
