@@ -43,7 +43,7 @@ export default function Budget() {
   };
 
   // 🚀 Async Handler for Reset Month Operation
-  const handleResetMonth = async () => {
+  const handleResetMonth = async (): Promise<void> => {
     const confirmAction = window.confirm(
       "Are you sure you want to reset the current month parameters? This action will restore your configurations back to default baselines.",
     );
@@ -51,12 +51,24 @@ export default function Budget() {
 
     try {
       setLoading(true);
-      await financeApi.resetMonthAndExport(); // Calls POST /api/monthly-budget/reset
-      await fetchLiveDatabaseData(); // Forces dynamic UI refresh across all cards
-      setRefreshKey((prev) => prev + 1); // 🚀 Forces immediate dashboard repaint
-    } catch (err) {
+      await financeApi.resetMonthAndExport();
+      await fetchLiveDatabaseData();
+      setRefreshKey((prev: number) => prev + 1);
+    } catch (err: unknown) {
       console.error("Reset operation failed:", err);
-      setError("Failed to reset monthly budget tracking tables.");
+      let errorMsg = "Failed to reset monthly budget tracking tables.";
+      if (typeof err === "object" && err !== null && "response" in err) {
+        const axiosErr = err as {
+          response?: { data?: { error?: string; message?: string } };
+        };
+        errorMsg =
+          axiosErr.response?.data?.error ||
+          axiosErr.response?.data?.message ||
+          errorMsg;
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
