@@ -1,16 +1,18 @@
 import express from "express";
 import {
   getDashboard,
-  updateMonthlyBudget,
   updateLetters,
   resetShift,
+  updateMonthlyBudget,
 } from "../controllers/dashboardController.js";
 
 const router = express.Router();
 
-router.get("/summary", getDashboard);
-router.put("/monthly-budget/:id", updateMonthlyBudget);
+// Maps to GET /api/dashboard
+router.get("/", getDashboard);
+
 router.post("/letters", updateLetters);
-router.post("/reset-shift", resetShift); // NEW ENDPOINT TO RESET THE SHIFT
+router.post("/reset-shift", resetShift);
+router.put("/budget/:id", updateMonthlyBudget);
 
 export default router;

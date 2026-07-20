@@ -8,28 +8,22 @@ const n = (v) => {
 const RATE_PER_LETTER = 245;
 const MAX_SHIFT_LETTERS = 750;
 
-// ==========================================
-// 1. GET DASHBOARD (WITH DUAL-CORE ENGINE)
-// ==========================================
 export const getDashboard = async (req, res) => {
   try {
-    // A. Fetch current budget planning row (limiting to Row 1 as per legacy code)
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
     if (!rows.length) {
       return res.status(404).json({ error: "Budget row not found" });
     }
     const b = rows[0];
-    const currentMonth = Number(b.month); // Numeric month (e.g. 1)
-    const currentYear = Number(b.year); // Numeric year (e.g. 2026)[cite: 2]
+    const currentMonth = Number(b.month);
+    const currentYear = Number(b.year);
 
-    // B. Fetch template configurations for emergency percentages
     const [templates] = await pool.query(
       "SELECT emergency_pct FROM AllocationTemplates WHERE user_id = 1 LIMIT 1",
     );
     const emergencyPct =
       templates.length > 0 ? n(templates[0].emergency_pct) : 0;
 
-    // C. Query actual expenses spent in this specific month and year[cite: 2]
     const [expensesRows] = await pool.query(
       `SELECT IFNULL(SUM(amount), 0) AS totalSpent 
        FROM DailyExpense 
@@ -38,7 +32,6 @@ export const getDashboard = async (req, res) => {
     );
     const actualSpentFromDaily = n(expensesRows[0].totalSpent);
 
-    // D. Query actual investments recorded for this specific month and year
     const [investmentRows] = await pool.query(
       `SELECT IFNULL(SUM(principal_invested), 0) AS totalPrincipal, 
               IFNULL(SUM(current_value), 0) AS totalValue 
@@ -49,22 +42,19 @@ export const getDashboard = async (req, res) => {
     const actualPrincipalInvested = n(investmentRows[0].totalPrincipal);
     const currentInvestmentValue = n(investmentRows[0].totalValue);
 
-    // E. Calculate Dynamic Shifts Salary[cite: 3]
+    // Expected Income (Budget target, NOT cash in hand yet)
     const liveSalary = n(b.translatedLetters) * RATE_PER_LETTER;
     const liveIncome = liveSalary + n(b.otherIncome);
 
-    // F. DUAL-CORE BALANCE FORMULA:
-    // Physical cash remaining = actual income minus actual cash spent and actual cash invested!
-    const liveBalance =
-      liveIncome - actualSpentFromDaily - actualPrincipalInvested;
+    // WALLET BALANCE RULE: Wallet balance remains 0 until resetMonth rolls over expected funds
+    const liveBalance = 0;
 
-    // AUTO-SYNC: Write this clean balance back to Aiven so pages remain aligned
+    // Update expected salary in DB, but keep wallet balance at 0 until reset
     await pool.query(
       "UPDATE MonthlyBudget SET salary = ?, balance = ? WHERE id = 1",
       [liveSalary, liveBalance],
     );
 
-    // G. Dynamic Outgoings Calculation (Mental/Planned caps for UI comparisons)
     const plannedEssentials =
       n(b.rent) +
       n(b.phoneInternet) +
@@ -74,7 +64,6 @@ export const getDashboard = async (req, res) => {
       n(b.medical) +
       n(b.familySupport);
 
-    // --- 2. DYNAMIC CALENDAR SHIFT LOGIC (Medals) ---[cite: 3]
     const now = new Date();
     const day = now.getDate();
     const lastDayOfMonth = new Date(
@@ -133,7 +122,6 @@ export const getDashboard = async (req, res) => {
       shiftStatus.variant = "danger";
     }
 
-    // Projected Pay Calculation
     let projectedPay = 0;
     if (shiftStatus.medal.includes("Gold"))
       projectedPay = MAX_SHIFT_LETTERS * RATE_PER_LETTER;
@@ -147,27 +135,22 @@ export const getDashboard = async (req, res) => {
     shiftStatus.potentialLoss =
       MAX_SHIFT_LETTERS * RATE_PER_LETTER - projectedPay;
 
-    // --- 3. DYNAMIC WEALTH SCORE (Using Real Assets & Cash) ---
     const emergencyTarget = (liveIncome * emergencyPct) / 100;
     const efCompletionPct =
       emergencyTarget > 0
         ? Math.min((n(b.emergencyFund) / emergencyTarget) * 100, 100)
         : 100;
 
-    // If actual investments exist, use their valuation. Else, fall back to the planned target.[cite: 3]
     const effectiveInvestmentVal =
       currentInvestmentValue > 0 ? currentInvestmentValue : n(b.investment);
     const investRatio =
       liveIncome > 0 ? (effectiveInvestmentVal / liveIncome) * 100 : 0;
 
-    // Discipline is evaluated based on actual remaining cash left over relative to income[cite: 3]
-    const disciplineMargin =
-      liveIncome > 0 ? (liveBalance / liveIncome) * 100 : 0;
+    const disciplineMargin = liveIncome > 0 ? 0 : 0;
 
     let score = 0;
     score += (efCompletionPct / 100) * 40;
     score += Math.min((investRatio / 20) * 30, 30);
-    score += Math.min((disciplineMargin / 10) * 20, 20);
     if (liveBalance > 0) score += 10;
 
     const stages = [
@@ -199,9 +182,6 @@ export const getDashboard = async (req, res) => {
   }
 };
 
-// ==========================================
-// 2. UPDATE TRANSLATED SHIFT LETTERS
-// ==========================================
 export const updateLetters = async (req, res) => {
   const { newLetters } = req.body;
   const num = Number(newLetters);
@@ -221,8 +201,9 @@ export const updateLetters = async (req, res) => {
 
     const newSalary = currentTotal * RATE_PER_LETTER;
 
+    // Updates expected salary target, but keeps wallet balance at 0 until reset
     await pool.query(
-      "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ? WHERE id = 1",
+      "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ?, balance = 0 WHERE id = 1",
       [currentTotal, currentShift, newSalary],
     );
     res.json({ success: true });
@@ -232,16 +213,14 @@ export const updateLetters = async (req, res) => {
   }
 };
 
-// ==========================================
-// 3. RESET SHIFT LOGS
-// ==========================================
 export const resetShift = async (req, res) => {
   try {
     await pool.query(`
       UPDATE MonthlyBudget 
       SET shiftLetters = 0, 
           translatedLetters = 0, 
-          salary = 0 
+          salary = 0,
+          balance = 0 
       WHERE id = 1
     `);
 
@@ -252,9 +231,6 @@ export const resetShift = async (req, res) => {
   }
 };
 
-// ==========================================
-// 4. UPDATE MONTHLY BUDGET PARAMETERS
-// ==========================================
 export const updateMonthlyBudget = async (req, res) => {
   const { id } = req.params;
   const incoming = req.body;
@@ -273,37 +249,14 @@ export const updateMonthlyBudget = async (req, res) => {
     );
 
     const current = { ...rows[0], ...incoming };
-    const month = Number(current.month); // numeric month[cite: 2]
-    const year = Number(current.year); // numeric year[cite: 2]
-
-    // A. Query actual expenses dynamically to prevent budget updates from resetting your balance[cite: 2]
-    const [expensesRows] = await pool.query(
-      `SELECT IFNULL(SUM(amount), 0) AS totalSpent 
-       FROM DailyExpense 
-       WHERE MONTH(expenseDate) = ? AND YEAR(expenseDate) = ?`,
-      [month, year],
-    );
-    const actualSpentFromDaily = n(expensesRows[0].totalSpent);
-
-    // B. Query actual investments dynamically
-    const [investResult] = await pool.query(
-      `SELECT IFNULL(SUM(principal_invested), 0) AS totalPrincipal 
-       FROM ActualInvestments 
-       WHERE month = ? AND year = ?`,
-      [month, year],
-    );
-    const actualPrincipalInvested = n(investResult[0].totalPrincipal);
-
     const emergencyPct =
       templates.length > 0 ? n(templates[0].emergency_pct) : 0;
     const income = n(current.salary) + n(current.otherIncome);
     const emergencyTarget = (income * emergencyPct) / 100;
 
-    // ENGINE RULE: Auto-Lock Investment[cite: 3]
     let finalInvestment = n(current.investment);
     let locked = false;
 
-    // Safeguard: Lock investment if emergency fund is neglected
     if (n(current.emergencyFund) < emergencyTarget) {
       if (finalInvestment > 0) {
         finalInvestment = 0;
@@ -311,8 +264,8 @@ export const updateMonthlyBudget = async (req, res) => {
       }
     }
 
-    // Clean Cash Balance formula (Decoupled from planned targets!)
-    const balance = income - actualSpentFromDaily - actualPrincipalInvested;
+    // Wallet balance strictly stays 0 until month reset
+    const balance = 0;
 
     const sql = `UPDATE MonthlyBudget SET 
       salary=?, otherIncome=?, rent=?, schoolSaving=?, phoneInternet=?, electricityWater=?, 

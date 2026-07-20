@@ -3,11 +3,10 @@ import { pool } from "../models/MonthlyBudget.js";
 // Helper utility to clean up numeric values
 const n = (val) => {
   const parsed = parseFloat(val);
-  return isNaN(parsed) ? 0 : parsed;
+  return IsNaN(parsed) ? 0 : parsed;
 };
 
 export const getBudget = async (req, res) => {
-  // 1. Intercept cron pings immediately and return a tiny plain-text or JSON response
   if (req.query.action === "cron") {
     return res.status(200).send("ok");
   }
@@ -87,7 +86,6 @@ export const updateBudget = async (req, res) => {
   }
 };
 
-// Helper utility to safely parse numbers and prevent accidental NaN database crashes
 const v = (val) => Number(val) || 0;
 
 export const resetMonth = async (req, res) => {
@@ -95,7 +93,6 @@ export const resetMonth = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Fetch current monthly setup before clearing information
     const [budgetRows] = await connection.query(
       "SELECT * FROM MonthlyBudget WHERE id = 1",
     );
@@ -104,7 +101,6 @@ export const resetMonth = async (req, res) => {
       const b = budgetRows[0];
       const investmentCapital = v(b.investment);
 
-      // Perform automatic rollover of planned investment capital to the actual portfolio
       if (investmentCapital > 0) {
         await connection.query(
           `INSERT INTO ActualInvestments (asset_name, principal_invested, current_value, month, year) 
@@ -119,7 +115,6 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // Perform automatic rollover of school fees allocations
       const schoolFeesSaving = v(b.schoolSaving);
       if (schoolFeesSaving > 0) {
         await connection.query(
@@ -129,7 +124,6 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // Perform automatic rollover of emergency savings
       const emergencySaving = v(b.emergencyFund);
       if (emergencySaving > 0) {
         await connection.query(
@@ -140,7 +134,6 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // Keep savings goal progress markers synchronized (Using actual column currentAmount)
       const goalsToUpdate = [
         { amount: schoolFeesSaving, name: "School Fees Buffer" },
         { amount: emergencySaving, name: "Emergency Fund" },
@@ -158,11 +151,9 @@ export const resetMonth = async (req, res) => {
         }
       }
 
-      // 🚀 2. DYNAMICALLY SYNC TO REAL-WORLD TIME
       const currentRealMonth = new Date().getMonth() + 1;
       const currentRealYear = new Date().getFullYear();
 
-      // 🚀 3. TARGETED UPDATE
       await connection.query(
         `UPDATE MonthlyBudget 
          SET 
@@ -179,7 +170,6 @@ export const resetMonth = async (req, res) => {
       );
     }
 
-    // 4. Clear transactional log lines to give your next shift a pristine slate
     await connection.query("DELETE FROM DailyExpense");
 
     await connection.commit();
@@ -200,19 +190,13 @@ export const initializeProject = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Wipe all daily transactions so they don't count against your balance
     await connection.query("DELETE FROM DailyExpense");
-
-    // 2. Wipe all investment records so they don't count against your balance
     await connection.query("DELETE FROM ActualInvestments");
-
-    // 3. Clear other supporting accumulators
     await connection.query("DELETE FROM SchoolFees");
     await connection.query(
       "UPDATE EmergencyFund SET current_amount = 0 WHERE user_id = 1",
     );
 
-    // 4. Reset MonthlyBudget limits and balance to 0
     await connection.query(
       `
       UPDATE MonthlyBudget 
