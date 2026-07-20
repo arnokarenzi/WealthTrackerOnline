@@ -20,7 +20,7 @@ export const getExpenses = async (req, res) => {
 };
 
 // ==========================================
-// 2. ADD EXPENSE (WITH AUTO-BALANCE RECALC)
+// 2. ADD EXPENSE (WITH AUTO-WALLET BALANCE DEDUCTION)
 // ==========================================
 export const addExpense = async (req, res) => {
   try {
@@ -52,17 +52,15 @@ export const addExpense = async (req, res) => {
       notes: notes || "",
     });
 
-    const [yearStr, monthStr] = expenseDate.split("-");
-    const month = Number(monthStr);
-    const year = Number(yearStr);
-
-    if (month && year) {
-      await MonthlyBudget.recalculateBalance(month, year);
-    }
+    // Automatically deduct the expense amount from the active wallet balance
+    await pool.query(
+      "UPDATE MonthlyBudget SET balance = balance - ? WHERE id = 1",
+      [numAmount],
+    );
 
     res
       .status(201)
-      .json({ message: "Expense saved and Budget balance updated!" });
+      .json({ message: "Expense saved and Wallet balance updated!" });
   } catch (err) {
     console.error("Add Expense Error:", err);
     res.status(500).json({ error: err.message });
@@ -70,14 +68,14 @@ export const addExpense = async (req, res) => {
 };
 
 // ==========================================
-// 3. DELETE EXPENSE (WITH AUTO-BALANCE RECALC)
+// 3. DELETE EXPENSE (WITH AUTO-WALLET BALANCE RESTORE)
 // ==========================================
 export const deleteExpense = async (req, res) => {
   try {
     const expenseId = req.params.id;
 
     const [expenseRows] = await pool.query(
-      "SELECT expenseDate FROM DailyExpense WHERE id = ?",
+      "SELECT expenseDate, amount FROM DailyExpense WHERE id = ?",
       [expenseId],
     );
 
@@ -85,17 +83,15 @@ export const deleteExpense = async (req, res) => {
       return res.status(404).json({ error: "Expense not found" });
     }
 
-    const rawDate = expenseRows[0].expenseDate;
+    const expenseAmount = n(expenseRows[0].amount);
 
     await DailyExpense.delete(expenseId);
 
-    const dateObj = new Date(rawDate);
-    const month = dateObj.getUTCMonth() + 1;
-    const year = dateObj.getUTCFullYear();
-
-    if (month && year) {
-      await MonthlyBudget.recalculateBalance(month, year);
-    }
+    // Automatically restore the deleted expense amount back to the wallet balance
+    await pool.query(
+      "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
+      [expenseAmount],
+    );
 
     res.json({ message: "Expense deleted and balance updated!" });
   } catch (err) {
