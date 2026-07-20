@@ -144,29 +144,16 @@ export default function Overview() {
     try {
       setIsResetting(true);
 
-      // Direct fetch to the backend initialization route
-      const response = await fetch(
-        "http://localhost:5000/api/monthly-budget/initialize",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to reset project.");
-      }
+      // Use the centralized financeApi client which dynamically handles local vs production base URLs
+      await financeApi.initializeProjectDefaults();
 
       await fetchDashboardData();
-      setRefreshKey((prev) => prev + 1); // Forces immediate UI card repaint
+      setRefreshKey((prev: number) => prev + 1); // Forces immediate UI card repaint
 
       setIsResetting(false);
       setIsResetModalOpen(false);
       setPasswordInput("");
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("System administrative wipe failure:", err);
       setAuthError("Failed to reset database. Verify backend connection.");
       setIsResetting(false);
