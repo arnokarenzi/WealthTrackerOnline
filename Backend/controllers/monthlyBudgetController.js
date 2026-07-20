@@ -1,9 +1,9 @@
 import { pool } from "../models/MonthlyBudget.js";
 
-// Helper utility to clean up numeric values
+// Helper utility to clean up numeric values (fixed isNaN case sensitivity)
 const n = (val) => {
   const parsed = parseFloat(val);
-  return IsNaN(parsed) ? 0 : parsed;
+  return isNaN(parsed) ? 0 : parsed;
 };
 
 export const getBudget = async (req, res) => {
@@ -151,6 +151,14 @@ export const resetMonth = async (req, res) => {
         }
       }
 
+      // PAYDAY ROLLOVER LOGIC:
+      // Shift expected salary and otherIncome into the actual liquid Wallet Balance.
+      const expectedSalary = v(b.salary);
+      const otherIncome = v(b.otherIncome);
+      const currentWalletBalance = v(b.balance);
+      const newWalletBalance =
+        currentWalletBalance + expectedSalary + otherIncome;
+
       const currentRealMonth = new Date().getMonth() + 1;
       const currentRealYear = new Date().getFullYear();
 
@@ -159,14 +167,16 @@ export const resetMonth = async (req, res) => {
          SET 
            month = ?, 
            year = ?,
+           salary = 0,
+           otherIncome = 0,
            schoolSaving = 0, 
            emergencyFund = 0, 
            investment = 0, 
-           balance = 0,
+           balance = ?,
            translatedLetters = 0, 
            shiftLetters = 0
          WHERE id = 1`,
-        [currentRealMonth, currentRealYear],
+        [currentRealMonth, currentRealYear, newWalletBalance],
       );
     }
 
@@ -175,7 +185,7 @@ export const resetMonth = async (req, res) => {
     await connection.commit();
     res.json({
       message:
-        "Shift cycle processed successfully! Shift metrics saved to active portfolios and trackers reset for your next runtime slate.",
+        "Shift cycle processed successfully! Expected earnings rolled over into your Wallet Balance, and placeholders reset for your next runtime slate.",
     });
   } catch (err) {
     await connection.rollback();

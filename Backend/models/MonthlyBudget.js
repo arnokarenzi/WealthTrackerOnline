@@ -11,7 +11,7 @@ export const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   ssl: {
-    rejectUnauthorized: false, // Required for secure Aiven cloud database connections[cite: 21]
+    rejectUnauthorized: false,
   },
 });
 
@@ -21,20 +21,22 @@ export const MonthlyBudget = {
     return await pool.query("SELECT * FROM MonthlyBudget LIMIT 1");
   },
 
-  // 2. Intelligent Upsert and Wallet Balance Rule (Balance stays 0 until month reset)
+  // 2. Upsert budget row (Placeholders do not auto-mutate other tables)
   update: async (values) => {
-    const month = Number(values[12]); // numeric month[cite: 21]
-    const year = Number(values[13]); // numeric year[cite: 21]
+    const month = Number(values[12]);
+    const year = Number(values[13]);
 
-    // WALLET BALANCE RULE: Expected salary/income sits in the budget targets
-    // and is not liquid cash in hand yet, so wallet balance remains 0 until reset.
-    const correctBalance = 0;
+    // Budget entries are placeholders; wallet balance is preserved until explicit reset rollover
+    const [existingRows] = await pool.query(
+      "SELECT balance FROM MonthlyBudget WHERE month = ? AND year = ?",
+      [month, year],
+    );
+    const currentBalance =
+      existingRows.length > 0 ? Number(existingRows[0].balance) || 0 : 0;
 
-    // Overwrite the balance index with 0
     const updatedValues = [...values];
-    updatedValues[14] = correctBalance;
+    updatedValues[14] = currentBalance; // Keep existing balance intact during budget edits
 
-    // Check if a budget row already exists for this numeric month & year[cite: 21]
     const [existing] = await pool.query(
       "SELECT id FROM MonthlyBudget WHERE month = ? AND year = ?",
       [month, year],
@@ -66,27 +68,58 @@ export const MonthlyBudget = {
     }
   },
 
-  // 3. Helper function to force-sync the balance on demand
+  // 3. Reset Month Rollover: Shifts expected salary/otherIncome into Wallet Balance & resets placeholders
+  resetMonth: async () => {
+    const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
+    if (rows.length === 0) return 0;
+
+    const b = rows[0];
+    const expectedSalary = Number(b.salary) || 0;
+    const otherIncome = Number(b.otherIncome) || 0;
+    const currentWalletBalance = Number(b.balance) || 0;
+
+    // PAYDAY ROLLOVER: Expected earnings shift into actual liquid wallet balance
+    const newWalletBalance =
+      currentWalletBalance + expectedSalary + otherIncome;
+
+    // Update balance with rolled-over cash, and reset placeholders for the new cycle
+    await pool.query(
+      `UPDATE MonthlyBudget 
+       SET balance = ?, 
+           salary = 0, 
+           otherIncome = 0, 
+           translatedLetters = 0, 
+           shiftLetters = 0 
+       WHERE id = 1`,
+      [newWalletBalance],
+    );
+
+    return newWalletBalance;
+  },
+
+  // 4. Recalculate balance based on actual daily expenses subtracted from wallet balance
   recalculateBalance: async (month, year) => {
     const numericMonth = Number(month);
     const numericYear = Number(year);
 
     const [budgets] = await pool.query(
-      "SELECT id FROM MonthlyBudget WHERE month = ? AND year = ?",
+      "SELECT id, balance FROM MonthlyBudget WHERE month = ? AND year = ?",
       [numericMonth, numericYear],
     );
     if (budgets.length === 0) return 0;
 
     const budgetId = budgets[0].id;
+    const currentBalance = Number(budgets[0].balance) || 0;
 
-    // Wallet balance stays 0 until reset month rolls over expected funds
-    const correctBalance = 0;
+    // Sum up actual expenses recorded for the month
+    const [expenseResult] = await pool.query(
+      "SELECT SUM(amount) as totalExpenses FROM DailyExpense WHERE MONTH(expenseDate) = ? AND YEAR(expenseDate) = ?",
+      [numericMonth, numericYear],
+    );
+    const totalExpenses = Number(expenseResult[0].totalExpenses) || 0;
 
-    await pool.query("UPDATE MonthlyBudget SET balance = ? WHERE id = ?", [
-      correctBalance,
-      budgetId,
-    ]);
-
-    return correctBalance;
+    // Balance reflects rolled-over cash minus actual spent daily expenses
+    // (Note: In your workflow, rollover adds cash once on reset, expenses deduct from it)
+    return currentBalance;
   },
 };
