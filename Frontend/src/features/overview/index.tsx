@@ -65,7 +65,6 @@ interface SavingsGoal {
 
 interface DailyExpense {
   amount: number;
-  // Add other relevant fields if needed
 }
 
 export default function Overview() {
@@ -85,43 +84,41 @@ export default function Overview() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState<boolean>(false);
 
-  // Added unique render key to break cache and force card remounts after initialization
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Extended the secureApi type to include the daily expenses fetcher
       const secureApi = financeApi as typeof financeApi & {
         getDashboardSummary: () => Promise<DashboardSummary>;
         getSavingsGoals: () => Promise<SavingsGoal[]>;
         getDailyExpenses?: () => Promise<DailyExpense[]>;
       };
 
+      // Wrapped individual calls with catch blocks so a single table error doesn't break the entire dashboard
       const [budgetPlan, dashboardSummary, savingsData, expensesData] =
         await Promise.all([
-          secureApi.getBudgetPlan(),
-          secureApi.getDashboardSummary(),
+          secureApi.getBudgetPlan().catch(() => null),
+          secureApi.getDashboardSummary().catch(() => null),
           secureApi.getSavingsGoals
-            ? secureApi.getSavingsGoals()
+            ? secureApi.getSavingsGoals().catch(() => [])
             : Promise.resolve([]),
           secureApi.getDailyExpenses
-            ? secureApi.getDailyExpenses()
+            ? secureApi.getDailyExpenses().catch(() => [])
             : Promise.resolve([]),
         ]);
 
-      setLiveBudget(budgetPlan);
-      setDashboardData(dashboardSummary);
-      setSavings(savingsData);
+      if (budgetPlan) setLiveBudget(budgetPlan);
+      if (dashboardSummary) setDashboardData(dashboardSummary);
+      setSavings(savingsData || []);
 
-      // Calculate total actual expenses from the fetched daily logs
-      const totalExp = expensesData.reduce(
-        (sum, item) => sum + Number(item.amount || 0),
+      const totalExp = (expensesData || []).reduce(
+        (sum: number, item: DailyExpense) => sum + Number(item.amount || 0),
         0,
       );
       setActualExpenses(totalExp);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Dashboard data fetch failure:", err);
     } finally {
       setLoading(false);
@@ -144,11 +141,10 @@ export default function Overview() {
     try {
       setIsResetting(true);
 
-      // Use the centralized financeApi client which dynamically handles local vs production base URLs
       await financeApi.initializeProjectDefaults();
 
       await fetchDashboardData();
-      setRefreshKey((prev: number) => prev + 1); // Forces immediate UI card repaint
+      setRefreshKey((prev: number) => prev + 1);
 
       setIsResetting(false);
       setIsResetModalOpen(false);
@@ -182,6 +178,9 @@ export default function Overview() {
     Number(liveBudget?.emergencyFund ?? 0) +
     Number(liveBudget?.investment ?? 0) +
     Number(liveBudget?.schoolSaving ?? 0);
+
+  // Corrected Wallet calculation (Total Income minus actual outlays and reserves)
+  const calculatedWallet = totalIncome - actualExpenses - accumulatedReserves;
 
   const emergencyGoal = savings.find(
     (g) => (g.goalName ?? g.goal_name ?? "").toLowerCase() === "emergency fund",
@@ -240,7 +239,6 @@ export default function Overview() {
           <ShiftTrackerWidget />
         </Box>
 
-        {/* Attached key={refreshKey} to break cache and force component remounts */}
         <Grid container spacing={2} sx={{ width: "100%" }} key={refreshKey}>
           <Grid item xs={12} md>
             <PersonalFinancesCard
@@ -263,7 +261,7 @@ export default function Overview() {
           <Grid item xs={12} md>
             <PersonalFinancesCard
               title="Wallet"
-              value={Number(liveBudget?.balance ?? 0)}
+              value={calculatedWallet}
               icon={<Balance sx={{ color: colors.greenAccent[600] }} />}
               chartType={[1, 3, 4, 5, 5, 6, 6, 8]}
             />

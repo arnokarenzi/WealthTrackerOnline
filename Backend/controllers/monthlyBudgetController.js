@@ -7,7 +7,6 @@ const n = (val) => {
 };
 
 export const getBudget = async (req, res) => {
-
   // 1. Intercept cron pings immediately and return a tiny plain-text or JSON response
   if (req.query.action === "cron") {
     return res.status(200).send("ok");
@@ -141,7 +140,7 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // Keep savings goal progress markers synchronized
+      // Keep savings goal progress markers synchronized (Corrected to SavingsGoals)
       const goalsToUpdate = [
         { amount: schoolFeesSaving, name: "School Fees Buffer" },
         { amount: emergencySaving, name: "Emergency Fund" },
@@ -151,7 +150,7 @@ export const resetMonth = async (req, res) => {
       for (const goal of goalsToUpdate) {
         if (goal.amount > 0) {
           await connection.query(
-            `UPDATE SavingsGoal
+            `UPDATE SavingsGoals
              SET currentSaved = (@new := currentSaved + ?),
                  remaining = targetAmount - @new,
                  progress = LEAST(GREATEST((@new / targetAmount) * 100, 0), 100),
@@ -167,13 +166,10 @@ export const resetMonth = async (req, res) => {
       }
 
       // 🚀 2. DYNAMICALLY SYNC TO REAL-WORLD TIME
-      // Instead of doing a blind +1, this grabs the actual current month and year.
-      // If you run this multiple times a month, it safely stays on the current month!
       const currentRealMonth = new Date().getMonth() + 1;
       const currentRealYear = new Date().getFullYear();
 
       // 🚀 3. TARGETED UPDATE
-      // Keeps your structural limits safe, clears the accumulators, and stamps the real-world date.
       await connection.query(
         `UPDATE MonthlyBudget 
          SET 

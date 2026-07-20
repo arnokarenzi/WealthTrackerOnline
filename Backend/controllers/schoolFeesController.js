@@ -19,9 +19,9 @@ export const resetSchoolFeesOnly = async (req, res) => {
     // 1. Clear the School Fees history table
     await connection.query("DELETE FROM SchoolFees");
 
-    // 2. Reset only the School Fees Buffer goal in the SavingsGoal table
+    // 2. Reset only the School Fees Buffer goal in the SavingsGoals table (Corrected to SavingsGoals)
     await connection.query(`
-      UPDATE SavingsGoal 
+      UPDATE SavingsGoals 
       SET currentSaved = 0, 
           remaining = targetAmount, 
           progress = 0, 
