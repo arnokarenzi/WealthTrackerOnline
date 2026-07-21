@@ -27,6 +27,7 @@ import {
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import { financeApi } from "../services/api";
+import { MonthlyBudget } from "../types/api";
 
 // 📑 Strict Interface aligned exactly with MySQL DailyExpense table columns
 interface ExpenseItem {
@@ -35,13 +36,6 @@ interface ExpenseItem {
   amount: number;
   category: string;
   expenseDate: string;
-}
-
-// 📑 Strict Interface for bringing in your baseline budget parameters
-interface BudgetSummary {
-  totalBudgetLimit: number;
-  salary?: number;
-  otherIncome?: number;
 }
 
 const EXPENSE_CATEGORIES: string[] = [
@@ -60,7 +54,7 @@ export default function Expenses() {
 
   // 📊 Live state management linked directly to backend sync
   const [expenseList, setExpenseList] = useState<ExpenseItem[]>([]);
-  const [budgetLimit, setBudgetLimit] = useState<number>(0); // 💸 Track baseline budget allowance
+  const [expectedIncome, setExpectedIncome] = useState<number>(0); // 💸 Track expected income (Salary + Other Income)
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -89,7 +83,7 @@ export default function Expenses() {
         // 🛡️ Double assertion isolation pattern to securely request mixed operational endpoints
         const secureApi = financeApi as unknown as {
           getExpenses?: () => Promise<RawExpenseItem[]>;
-          getBudgetSummary?: () => Promise<BudgetSummary>;
+          getBudgetPlan?: () => Promise<MonthlyBudget>;
         };
 
         // 1. Fetch Expenses Log
@@ -107,21 +101,14 @@ export default function Expenses() {
           setExpenseList(parsedExpenses);
         }
 
-        // 2. Fetch Budget Target
-        if (secureApi.getBudgetSummary) {
-          const budgetData = await secureApi.getBudgetSummary();
-
-          // Calculate total limit based on real database fields instead of a missing column
-          const calculatedLimit =
+        // 2. Fetch Budget Plan (Expected Income: Salary + Other Income)
+        if (secureApi.getBudgetPlan) {
+          const budgetData = await secureApi.getBudgetPlan();
+          const calculatedIncome =
             Number(budgetData?.salary ?? 0) +
             Number(budgetData?.otherIncome ?? 0);
 
-          // Only set the limit if we actually got data back, otherwise keep your fallback
-          setBudgetLimit(
-            calculatedLimit > 0
-              ? calculatedLimit
-              : (budgetData?.totalBudgetLimit ?? 0),
-          );
+          setExpectedIncome(calculatedIncome);
         }
       } catch (err) {
         console.error("Failed to read synchronized system records:", err);
@@ -208,12 +195,12 @@ export default function Expenses() {
     }
   };
 
-  // 📊 Math Engine: Deduct active costs directly from budget pools
+  // 📊 Math Engine: Deduct active costs directly from Expected Income
   const totalSpent = expenseList.reduce(
     (acc, curr) => acc + Number(curr?.amount ?? 0),
     0,
   );
-  const remainingSurplus = budgetLimit - totalSpent;
+  const remainingSurplus = expectedIncome - totalSpent;
 
   return (
     <Box sx={{ padding: 2 }}>
@@ -342,7 +329,7 @@ export default function Expenses() {
             </CardContent>
           </Card>
 
-          {/* 🌟 NEW: Remaining Adjusted Surplus Balance Card */}
+          {/* 🌟 Remaining Adjusted Surplus Balance Card (Expected Income - Expenses) */}
           <Card
             sx={{ backgroundColor: colors.primary[400], boxShadow: 4, mt: 3 }}
           >
