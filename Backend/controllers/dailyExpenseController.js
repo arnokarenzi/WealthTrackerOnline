@@ -44,7 +44,8 @@ export const addExpense = async (req, res) => {
       ? category
       : "miscellaneous";
 
-    await DailyExpense.create({
+    // Capture the MySQL insert result to obtain the auto-incremented ID
+    const [result] = await DailyExpense.create({
       expenseDate,
       description,
       category: finalCategory,
@@ -58,9 +59,14 @@ export const addExpense = async (req, res) => {
       [numAmount],
     );
 
-    res
-      .status(201)
-      .json({ message: "Expense saved and Wallet balance updated!" });
+    res.status(201).json({
+      message: "Expense saved and Wallet balance updated!",
+      id: result.insertId, // 🌟 Return the actual database ID back to the frontend
+      expenseDate,
+      description,
+      category: finalCategory,
+      amount: numAmount,
+    });
   } catch (err) {
     console.error("Add Expense Error:", err);
     res.status(500).json({ error: err.message });
