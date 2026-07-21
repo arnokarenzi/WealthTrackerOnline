@@ -10,6 +10,7 @@ const router = express.Router();
 
 // Maps to GET /api/dashboard
 router.get("/", getDashboard);
+router.get("/summary", getDashboard);
 
 router.post("/letters", updateLetters);
 router.post("/reset-shift", resetShift);

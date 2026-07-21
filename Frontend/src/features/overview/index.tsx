@@ -93,7 +93,7 @@ export default function Overview() {
       const secureApi = financeApi as typeof financeApi & {
         getDashboardSummary: () => Promise<DashboardSummary>;
         getSavingsGoals: () => Promise<SavingsGoal[]>;
-        getDailyExpenses?: () => Promise<DailyExpense[]>;
+        getExpenses?: () => Promise<DailyExpense[]>;
       };
 
       // Wrapped individual calls with catch blocks so a single table error doesn't break the entire dashboard
@@ -104,8 +104,8 @@ export default function Overview() {
           secureApi.getSavingsGoals
             ? secureApi.getSavingsGoals().catch(() => [])
             : Promise.resolve([]),
-          secureApi.getDailyExpenses
-            ? secureApi.getDailyExpenses().catch(() => [])
+          secureApi.getExpenses
+            ? secureApi.getExpenses().catch(() => [])
             : Promise.resolve([]),
         ]);
 
@@ -174,13 +174,30 @@ export default function Overview() {
       Number(dashboardData.monthlyBudget.otherIncome)
     : salary + auxiliary;
 
-  const accumulatedReserves =
-    Number(liveBudget?.emergencyFund ?? 0) +
-    Number(liveBudget?.investment ?? 0) +
-    Number(liveBudget?.schoolSaving ?? 0);
+  // Total accumulated reserves calculated dynamically from actual Savings Goals records
+  const accumulatedReserves = savings.reduce((total, goal) => {
+    const current = Number(
+      goal.currentAmount ?? goal.current_amount ?? goal.currentSaved ?? 0,
+    );
+    return total + current;
+  }, 0);
 
-  // Corrected Wallet calculation (Total Income minus actual outlays and reserves)
-  const calculatedWallet = totalIncome - actualExpenses - accumulatedReserves;
+  // Extract true Investments value exclusively from the "Business Capital" savings goal
+  const businessCapitalGoal = savings.find(
+    (g) =>
+      (g.goalName ?? g.goal_name ?? "").toLowerCase() === "business capital",
+  );
+  const totalInvestments = Number(
+    businessCapitalGoal?.currentAmount ??
+      businessCapitalGoal?.current_amount ??
+      businessCapitalGoal?.currentSaved ??
+      0,
+  );
+
+  // Pull wallet balance directly from the backend's authoritative balance source
+  const calculatedWallet = Number(
+    dashboardData?.monthlyBudget?.balance ?? liveBudget?.balance ?? 0,
+  );
 
   const emergencyGoal = savings.find(
     (g) => (g.goalName ?? g.goal_name ?? "").toLowerCase() === "emergency fund",
@@ -236,7 +253,7 @@ export default function Overview() {
         </Box>
 
         <Box sx={{ width: "100%", mb: 2 }}>
-          <ShiftTrackerWidget />
+          <ShiftTrackerWidget key={refreshKey} />
         </Box>
 
         <Grid container spacing={2} sx={{ width: "100%" }} key={refreshKey}>
@@ -277,7 +294,7 @@ export default function Overview() {
           <Grid item xs={12} md>
             <PersonalFinancesCard
               title="Investments"
-              value={Number(liveBudget?.investment ?? 0)}
+              value={totalInvestments}
               icon={<AttachMoney sx={{ color: colors.greenAccent[600] }} />}
               chartType={[1, 4, 2, 5, 7, 2, 4, 6]}
             />
