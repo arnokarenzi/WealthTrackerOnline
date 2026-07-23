@@ -21,15 +21,9 @@ import TransactionHistory from "./components/TransactionHistory";
 import { tokens } from "../../assets/theme";
 import { financeApi } from "../../services/api";
 
-interface SavingsGoal {
-  id: number;
-  goalName?: string;
-  goal_name?: string;
-  targetAmount?: number;
-  target_amount?: number;
-  currentSaved?: number;
-  currentAmount?: number;
-  current_amount?: number;
+interface CashReserveItem {
+  current: number;
+  target: number;
 }
 
 interface ActualInvestment {
@@ -51,7 +45,13 @@ export default function Investments() {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
-  const [savings, setSavings] = useState<SavingsGoal[]>([]);
+  // Specialized Liquid Cash Reserves
+  const [reserves, setReserves] = useState<{ [key: string]: CashReserveItem }>({
+    Emergency: { current: 0, target: 1000000 },
+    "School Fees": { current: 0, target: 500000 },
+    Investments: { current: 0, target: 2000000 },
+  });
+
   const [portfolios, setPortfolios] = useState<ActualInvestment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -60,31 +60,48 @@ export default function Investments() {
   const [activeAsset, setActiveAsset] = useState<ActualInvestment | null>(null);
   const [assetInputValue, setAssetInputValue] = useState<string>("");
 
-  // Cash Reserves Modal States (Fixed Cards)
-  const [isSavingsModalOpen, setIsSavingsModalOpen] = useState<boolean>(false);
+  // Cash Reserve Modal States
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState<boolean>(false);
   const [activeCategoryTitle, setActiveCategoryTitle] = useState<string>("");
-  const [activeGoal, setActiveGoal] = useState<SavingsGoal | null>(null);
-  const [savingsInputValue, setSavingsInputValue] = useState<string>("");
+  const [reserveInputValue, setReserveInputValue] = useState<string>("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const gatherVaultData = async () => {
     try {
       const secureApi = financeApi as typeof financeApi & {
-        getSavingsGoals: () => Promise<SavingsGoal[]>;
+        getEmergencyFund?: () => Promise<{
+          current_amount?: number;
+          target_amount?: number;
+        }>;
+        getSchoolFees?: () => Promise<{ cumulative?: number }>;
         getActualInvestments: () => Promise<ActualInvestment[]>;
       };
 
-      const [savingsData, investmentData] = await Promise.all([
-        secureApi.getSavingsGoals
-          ? secureApi.getSavingsGoals()
-          : Promise.resolve([]),
+      const [emergencyData, schoolData, investmentData] = await Promise.all([
+        secureApi.getEmergencyFund
+          ? secureApi.getEmergencyFund()
+          : Promise.resolve({ current_amount: 0 }),
+        secureApi.getSchoolFees
+          ? secureApi.getSchoolFees()
+          : Promise.resolve({ cumulative: 0 }),
         secureApi.getActualInvestments
           ? secureApi.getActualInvestments()
           : Promise.resolve([]),
       ]);
 
-      setSavings(savingsData);
+      setReserves((prev) => ({
+        ...prev,
+        Emergency: {
+          ...prev.Emergency,
+          current: Number(emergencyData?.current_amount || 0),
+        },
+        "School Fees": {
+          ...prev["School Fees"],
+          current: Number(schoolData?.cumulative || 0),
+        },
+      }));
+
       setPortfolios(investmentData);
     } catch (err) {
       console.error("Wealth vault pipeline failure:", err);
@@ -137,100 +154,61 @@ export default function Investments() {
     }
   };
 
-  // Fixed Cash Reserve / Savings Goal Edit Handlers
-  const handleOpenSavingsEdit = (categoryTitle: string) => {
+  // Fixed Cash Reserve Edit Handlers
+  const handleOpenReserveEdit = (categoryTitle: string) => {
     setActiveCategoryTitle(categoryTitle);
-    const existing = savings.find(
-      (g) =>
-        (g.goalName ?? g.goal_name ?? "").toLowerCase() ===
-        categoryTitle.toLowerCase(),
-    );
-
-    if (existing) {
-      setActiveGoal(existing);
-      const current =
-        existing.currentSaved ??
-        existing.currentAmount ??
-        existing.current_amount ??
-        0;
-      setSavingsInputValue(String(current));
-    } else {
-      setActiveGoal(null);
-      setSavingsInputValue("0");
-    }
-    setIsSavingsModalOpen(true);
+    const currentVal = reserves[categoryTitle]?.current || 0;
+    setReserveInputValue(String(currentVal));
+    setIsReserveModalOpen(true);
   };
 
-  const handleCloseSavingsEdit = () => {
-    setIsSavingsModalOpen(false);
-    setActiveGoal(null);
+  const handleCloseReserveEdit = () => {
+    setIsReserveModalOpen(false);
     setActiveCategoryTitle("");
-    setSavingsInputValue("");
+    setReserveInputValue("");
   };
 
-  const handleSavingsSubmit = async () => {
-    if (!savingsInputValue || !activeCategoryTitle) return;
+  const handleReserveSubmit = async () => {
+    if (!reserveInputValue || !activeCategoryTitle) return;
 
     try {
       setSubmitting(true);
-      const secureApi = financeApi as typeof financeApi & {
-        updateSavingsGoal?: (
-          id: number,
-          data: { amountToAdd: number },
-        ) => Promise<void>;
-        createSavingsGoal?: (data: {
-          goalName: string;
-          targetAmount: number;
-        }) => Promise<void>;
-      };
+      const val = Number(reserveInputValue);
 
-      const targetValue = Number(savingsInputValue);
-
-      if (activeGoal) {
-        const current = Number(
-          activeGoal.currentSaved ??
-            activeGoal.currentAmount ??
-            activeGoal.current_amount ??
-            0,
-        );
-        const diff = targetValue - current;
-
-        if (secureApi.updateSavingsGoal && diff !== 0) {
-          await secureApi.updateSavingsGoal(activeGoal.id, {
-            amountToAdd: diff,
-          });
-        }
-      } else {
-        const defaultTargets: { [key: string]: number } = {
-          Emergency: 1000000,
-          "School Fees": 500000,
-          Investments: 2000000,
-        };
-        const targetAmount =
-          defaultTargets[activeCategoryTitle] || targetValue * 2;
-
-        if (secureApi.createSavingsGoal) {
-          await secureApi.createSavingsGoal({
-            goalName: activeCategoryTitle,
-            targetAmount: targetAmount,
-          });
-        }
+      // Explicit API requests to persist data in the database
+      if (activeCategoryTitle === "Emergency") {
+        await fetch("/api/emergency", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ current_amount: val }),
+        });
+      } else if (activeCategoryTitle === "School Fees") {
+        await fetch("/api/school-fees", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amountSaved: val }),
+        });
+      } else if (activeCategoryTitle === "Investments") {
+        await fetch("/api/investments/reserve", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: val }),
+        });
       }
 
       await gatherVaultData();
-      handleCloseSavingsEdit();
+      handleCloseReserveEdit();
     } catch (err) {
-      console.error("Failed to update cash reserve value:", err);
+      console.error("Failed to update specialized reserve in database:", err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Fixed Cash Reserve Categories Configuration
   const fixedCategories = [
-    { title: "Emergency", defaultTarget: 1000000 },
-    { title: "School Fees", defaultTarget: 500000 },
-    { title: "Investments", defaultTarget: 2000000 },
+    { title: "Emergency" },
+    { title: "School Fees" },
+    { title: "Investments" },
   ];
 
   return (
@@ -281,24 +259,12 @@ export default function Investments() {
 
                 <Grid container spacing={2}>
                   {fixedCategories.map((cat) => {
-                    const matchedGoal = savings.find(
-                      (g) =>
-                        (g.goalName ?? g.goal_name ?? "").toLowerCase() ===
-                        cat.title.toLowerCase(),
-                    );
-
-                    const target = Number(
-                      matchedGoal?.targetAmount ??
-                        matchedGoal?.target_amount ??
-                        cat.defaultTarget,
-                    );
-                    const current = Number(
-                      matchedGoal?.currentSaved ??
-                        matchedGoal?.currentAmount ??
-                        matchedGoal?.current_amount ??
-                        0,
-                    );
-
+                    const data = reserves[cat.title] || {
+                      current: 0,
+                      target: 100000,
+                    };
+                    const current = data.current;
+                    const target = data.target;
                     const percentageCalculation =
                       target > 0 ? (current / target) * 100 : 0;
 
@@ -317,7 +283,7 @@ export default function Investments() {
                           >
                             <IconButton
                               size="small"
-                              onClick={() => handleOpenSavingsEdit(cat.title)}
+                              onClick={() => handleOpenReserveEdit(cat.title)}
                               sx={{
                                 color: colors.grey[300],
                                 "&:hover": { color: colors.greenAccent[500] },
@@ -571,10 +537,10 @@ export default function Investments() {
         </DialogActions>
       </Dialog>
 
-      {/* 🛡️ Modal for Direct Editing of Fixed Cash Reserves */}
+      {/* 🛡️ Modal for Direct Editing of Cash Reserves */}
       <Dialog
-        open={isSavingsModalOpen}
-        onClose={handleCloseSavingsEdit}
+        open={isReserveModalOpen}
+        onClose={handleCloseReserveEdit}
         PaperProps={{
           sx: {
             backgroundColor: colors.primary[400],
@@ -594,10 +560,10 @@ export default function Investments() {
           <TextField
             fullWidth
             type="number"
-            label="Current Saved Amount (RWF)"
+            label="Current Amount (RWF)"
             variant="outlined"
-            value={savingsInputValue}
-            onChange={(e) => setSavingsInputValue(e.target.value)}
+            value={reserveInputValue}
+            onChange={(e) => setReserveInputValue(e.target.value)}
             disabled={submitting}
             autoFocus
             InputLabelProps={{ style: { color: colors.grey[200] } }}
@@ -606,17 +572,17 @@ export default function Investments() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button
-            onClick={handleCloseSavingsEdit}
+            onClick={handleCloseReserveEdit}
             disabled={submitting}
             sx={{ color: colors.grey[200] }}
           >
             Cancel
           </Button>
           <Button
-            onClick={handleSavingsSubmit}
+            onClick={handleReserveSubmit}
             variant="contained"
             color="success"
-            disabled={submitting || !savingsInputValue}
+            disabled={submitting || !reserveInputValue}
           >
             {submitting ? "Saving..." : "Save Reserve"}
           </Button>

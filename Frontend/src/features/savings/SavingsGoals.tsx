@@ -11,9 +11,9 @@ import {
   Button,
   CircularProgress,
   Alert,
-  IconButton, // Added for Delete button
+  IconButton,
 } from "@mui/material";
-import { DeleteOutline } from "@mui/icons-material"; // Added icon
+import { DeleteOutline } from "@mui/icons-material";
 import { tokens } from "../../assets/theme";
 import { financeApi } from "../../services/api";
 
@@ -146,7 +146,6 @@ export default function SavingsGoals() {
       ) : (
         <Grid container spacing={3}>
           {sortedGoals.map((goal) => {
-            // FIXED: Explicitly convert to Number to prevent string comparison bugs
             const isCompleted =
               Number(goal.currentAmount) >= Number(goal.targetAmount);
             const progress = Math.min(
@@ -165,7 +164,6 @@ export default function SavingsGoals() {
                     position: "relative",
                   }}
                 >
-                  {/* Delete Button */}
                   <Box sx={{ position: "absolute", top: 8, right: 8 }}>
                     <IconButton
                       onClick={() => handleDeleteGoal(goal.id)}

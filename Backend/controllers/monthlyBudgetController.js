@@ -6,6 +6,8 @@ const n = (val) => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
+const v = (val) => Number(val) || 0;
+
 export const getBudget = async (req, res) => {
   if (req.query.action === "cron") {
     return res.status(200).send("ok");
@@ -86,112 +88,30 @@ export const updateBudget = async (req, res) => {
   }
 };
 
-const v = (val) => Number(val) || 0;
-
-export const resetMonth = async (req, res) => {
-  const connection = await pool.getConnection();
+// Add this controller function in your backend
+export const addExtraIncome = async (req, res) => {
   try {
-    await connection.beginTransaction();
+    const { amount, description } = req.body;
+    const numAmount = Number(amount);
 
-    const [budgetRows] = await connection.query(
-      "SELECT * FROM MonthlyBudget WHERE id = 1",
-    );
-
-    if (budgetRows.length > 0) {
-      const b = budgetRows[0];
-      const investmentCapital = v(b.investment);
-
-      if (investmentCapital > 0) {
-        await connection.query(
-          `INSERT INTO ActualInvestments (asset_name, principal_invested, current_value, month, year) 
-           VALUES (?, ?, ?, ?, ?)`,
-          [
-            "Shift Rollover Portfolio",
-            investmentCapital,
-            investmentCapital,
-            b.month,
-            b.year,
-          ],
-        );
-      }
-
-      const schoolFeesSaving = v(b.schoolSaving);
-      if (schoolFeesSaving > 0) {
-        await connection.query(
-          `INSERT INTO SchoolFees (month, amountSaved, cumulative) 
-           VALUES (?, ?, (SELECT IFNULL(SUM(amountSaved), 0) + ? FROM SchoolFees AS tmp))`,
-          [String(b.month), schoolFeesSaving, schoolFeesSaving],
-        );
-      }
-
-      const emergencySaving = v(b.emergencyFund);
-      if (emergencySaving > 0) {
-        await connection.query(
-          `UPDATE EmergencyFund 
-           SET current_amount = current_amount + ? 
-           WHERE user_id = 1`,
-          [emergencySaving],
-        );
-      }
-
-      const goalsToUpdate = [
-        { amount: schoolFeesSaving, name: "School Fees Buffer" },
-        { amount: emergencySaving, name: "Emergency Fund" },
-        { amount: investmentCapital, name: "Business Capital" },
-      ];
-
-      for (const goal of goalsToUpdate) {
-        if (goal.amount > 0) {
-          await connection.query(
-            `UPDATE SavingsGoals
-             SET currentAmount = currentAmount + ?
-             WHERE goalName = ?`,
-            [goal.amount, goal.name],
-          );
-        }
-      }
-
-      // PAYDAY ROLLOVER LOGIC:
-      // Shift expected salary and otherIncome into the actual liquid Wallet Balance.
-      const expectedSalary = v(b.salary);
-      const otherIncome = v(b.otherIncome);
-      const currentWalletBalance = v(b.balance);
-      const newWalletBalance =
-        currentWalletBalance + expectedSalary + otherIncome;
-
-      const currentRealMonth = new Date().getMonth() + 1;
-      const currentRealYear = new Date().getFullYear();
-
-      await connection.query(
-        `UPDATE MonthlyBudget 
-         SET 
-           month = ?, 
-           year = ?,
-           salary = 0,
-           otherIncome = 0,
-           schoolSaving = 0, 
-           emergencyFund = 0, 
-           investment = 0, 
-           balance = ?,
-           translatedLetters = 0, 
-           shiftLetters = 0
-         WHERE id = 1`,
-        [currentRealMonth, currentRealYear, newWalletBalance],
-      );
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount provided." });
     }
 
-    await connection.query("DELETE FROM DailyExpense");
+    // Directly increase the active wallet balance in MySQL
+    await pool.query(
+      "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
+      [numAmount],
+    );
 
-    await connection.commit();
-    res.json({
-      message:
-        "Shift cycle processed successfully! Expected earnings rolled over into your Wallet Balance, and placeholders reset for your next runtime slate.",
+    res.status(200).json({
+      message: "Extra income successfully added to wallet balance!",
+      amount: numAmount,
+      description: description || "Side Hustle / Extra Income",
     });
   } catch (err) {
-    await connection.rollback();
+    console.error("Add Extra Income Error:", err);
     res.status(500).json({ error: err.message });
-  } finally {
-    connection.release();
   }
 };
 
@@ -228,6 +148,116 @@ export const initializeProject = async (req, res) => {
     await connection.rollback();
     console.error("Reset failed:", err);
     res.status(500).json({ error: "Failed to reset: " + err.message });
+  } finally {
+    connection.release();
+  }
+};
+
+export const resetMonth = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [budgetRows] = await connection.query(
+      "SELECT * FROM MonthlyBudget WHERE id = 1",
+    );
+
+    if (budgetRows.length > 0) {
+      const b = budgetRows[0];
+      const investmentCapital = v(b.investment);
+
+      // 1. Investments (Specialized Table Only)
+      if (investmentCapital > 0) {
+        await connection.query(
+          `INSERT INTO ActualInvestments (asset_name, principal_invested, current_value, month, year) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            "Shift Rollover Portfolio",
+            investmentCapital,
+            investmentCapital,
+            b.month,
+            b.year,
+          ],
+        );
+      }
+
+      // 2. School Fees (Specialized Table Only)
+      const schoolFeesSaving = v(b.schoolSaving);
+      if (schoolFeesSaving > 0) {
+        await connection.query(
+          `INSERT INTO SchoolFees (month, amountSaved, cumulative) 
+           VALUES (?, ?, (SELECT IFNULL(SUM(amountSaved), 0) + ? FROM SchoolFees AS tmp))`,
+          [String(b.month), schoolFeesSaving, schoolFeesSaving],
+        );
+      }
+
+      // 3. Emergency Fund (Specialized Table Only)
+      const emergencySaving = v(b.emergencyFund);
+      if (emergencySaving > 0) {
+        await connection.query(
+          `UPDATE EmergencyFund 
+           SET current_amount = current_amount + ? 
+           WHERE user_id = 1`,
+          [emergencySaving],
+        );
+      }
+
+      // NOTE: The loop updating `SavingsGoals` has been completely removed here.
+      // This ensures Emergency, School Fees, and Investments never spill over
+      // into the generic Savings Goals page.
+
+      // --- PENDING EARNINGS ROLLOVER ---
+      const expectedSalary = v(b.salary);
+      const otherIncome = v(b.otherIncome);
+
+      if (expectedSalary > 0) {
+        await connection.query(
+          `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
+           VALUES (?, ?, NOW(), FALSE)`,
+          [expectedSalary, "Shift Salary Rollover"],
+        );
+      }
+
+      if (otherIncome > 0) {
+        await connection.query(
+          `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
+           VALUES (?, ?, NOW(), FALSE)`,
+          [otherIncome, "Other Income / Auxiliary Rollover"],
+        );
+      }
+
+      const currentRealMonth = new Date().getMonth() + 1;
+      const currentRealYear = new Date().getFullYear();
+      const currentWalletBalance = v(b.balance);
+
+      await connection.query(
+        `UPDATE MonthlyBudget 
+         SET 
+           month = ?, 
+           year = ?,
+           salary = 0,
+           otherIncome = 0,
+           schoolSaving = 0, 
+           emergencyFund = 0, 
+           investment = 0, 
+           balance = ?,
+           translatedLetters = 0, 
+           shiftLetters = 0
+         WHERE id = 1`,
+        [currentRealMonth, currentRealYear, currentWalletBalance],
+      );
+    }
+
+    await connection.query("DELETE FROM DailyExpense");
+
+    await connection.commit();
+    res.json({
+      message:
+        "Shift cycle processed successfully! Specialized funds routed to dedicated tables without mixing into savings goals.",
+    });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
   } finally {
     connection.release();
   }

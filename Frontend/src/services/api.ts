@@ -7,6 +7,7 @@ import {
   GratitudeLog,
   SavingsGoal,
   ActualInvestment,
+  PendingEarningItem,
 } from "../types/api";
 
 const DEV_API_URL = "http://localhost:5000/api";
@@ -87,6 +88,25 @@ export const financeApi = {
 
   deleteExpense: async (id: number): Promise<void> => {
     await apiClient.delete(`/daily-expenses/${id}`);
+  },
+
+  // --- ADD INSIDE financeApi object in api.ts ---
+  addExtraIncome: async (data: {
+    amount: number;
+    description: string;
+  }): Promise<{ message: string }> => {
+    const response = await apiClient.post("/monthly-budget/add-income", data);
+    return response.data;
+  },
+
+  // Inside your financeApi object:
+  getPendingEarnings: async (): Promise<PendingEarningItem[]> => {
+    const response = await apiClient.get("/pending-earnings");
+    return response.data;
+  },
+
+  claimPendingEarning: async (id: number): Promise<void> => {
+    await apiClient.post(`/pending-earnings/claim/${id}`);
   },
 
   getInvestments: async (

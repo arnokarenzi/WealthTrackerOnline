@@ -68,7 +68,7 @@ export const MonthlyBudget = {
     }
   },
 
-  // 3. Reset Month Rollover: Shifts expected salary/otherIncome into Wallet Balance & resets placeholders
+  // 3. Reset Month Rollover: Stages expected salary/otherIncome into PendingEarnings instead of wallet deposit
   resetMonth: async () => {
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
     if (rows.length === 0) return 0;
@@ -78,11 +78,24 @@ export const MonthlyBudget = {
     const otherIncome = Number(b.otherIncome) || 0;
     const currentWalletBalance = Number(b.balance) || 0;
 
-    // PAYDAY ROLLOVER: Expected earnings shift into actual liquid wallet balance
-    const newWalletBalance =
-      currentWalletBalance + expectedSalary + otherIncome;
+    // Stage expected earnings as uncollected pending receivables
+    if (expectedSalary > 0) {
+      await pool.query(
+        `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
+         VALUES (?, ?, NOW(), FALSE)`,
+        [expectedSalary, "Shift Salary Rollover"],
+      );
+    }
 
-    // Update balance with rolled-over cash, and reset placeholders for the new cycle
+    if (otherIncome > 0) {
+      await pool.query(
+        `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
+         VALUES (?, ?, NOW(), FALSE)`,
+        [otherIncome, "Other Income / Auxiliary Rollover"],
+      );
+    }
+
+    // Preserve the current wallet balance until manually claimed, and reset placeholders for the new cycle
     await pool.query(
       `UPDATE MonthlyBudget 
        SET balance = ?, 
@@ -91,10 +104,10 @@ export const MonthlyBudget = {
            translatedLetters = 0, 
            shiftLetters = 0 
        WHERE id = 1`,
-      [newWalletBalance],
+      [currentWalletBalance],
     );
 
-    return newWalletBalance;
+    return currentWalletBalance;
   },
 
   // 4. Recalculate balance based on actual daily expenses subtracted from wallet balance
@@ -119,7 +132,6 @@ export const MonthlyBudget = {
     const totalExpenses = Number(expenseResult[0].totalExpenses) || 0;
 
     // Balance reflects rolled-over cash minus actual spent daily expenses
-    // (Note: In your workflow, rollover adds cash once on reset, expenses deduct from it)
     return currentBalance;
   },
 };

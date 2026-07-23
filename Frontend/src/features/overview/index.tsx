@@ -32,6 +32,7 @@ import {
 import PersonalFinancesCard from "./components/PersonalFinanceCard";
 import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
+import PendingEarningsWidget from "../../components/PendingEarningsWidget"; // 🌟 Imported Pending Earnings Widget
 
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
@@ -83,6 +84,12 @@ export default function Overview() {
   const [passwordInput, setPasswordInput] = useState<string>("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState<boolean>(false);
+
+  // 🌟 Extra Income Modal States
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState<boolean>(false);
+  const [incomeAmount, setIncomeAmount] = useState<string>("");
+  const [incomeDescription, setIncomeDescription] = useState<string>("");
+  const [isSubmittingIncome, setIsSubmittingIncome] = useState<boolean>(false);
 
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
@@ -166,6 +173,47 @@ export default function Overview() {
     if (!isResetting) setIsResetModalOpen(false);
   };
 
+  // 🌟 Extra Income Handlers
+  const handleOpenIncomeModal = (): void => {
+    setIsIncomeModalOpen(true);
+    setIncomeAmount("");
+    setIncomeDescription("");
+  };
+
+  const handleCloseIncomeModal = (): void => {
+    if (!isSubmittingIncome) setIsIncomeModalOpen(false);
+  };
+
+  const handleSaveExtraIncome = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    const parsedAmount = parseFloat(incomeAmount);
+    if (!parsedAmount || parsedAmount <= 0) return;
+
+    try {
+      setIsSubmittingIncome(true);
+      const secureApi = financeApi as typeof financeApi & {
+        addExtraIncome?: (data: {
+          amount: number;
+          description: string;
+        }) => Promise<void>;
+      };
+
+      if (secureApi.addExtraIncome) {
+        await secureApi.addExtraIncome({
+          amount: parsedAmount,
+          description: incomeDescription || "Side Hustle / Freelance",
+        });
+      }
+
+      await fetchDashboardData();
+      setIsIncomeModalOpen(false);
+    } catch (err) {
+      console.error("Failed to commit extra income:", err);
+    } finally {
+      setIsSubmittingIncome(false);
+    }
+  };
+
   // Calculations for Cards
   const salary = Number(liveBudget?.salary ?? 0);
   const auxiliary = Number(liveBudget?.otherIncome ?? 0);
@@ -236,24 +284,42 @@ export default function Overview() {
               A snapshot of your financial health
             </Typography>
           </Box>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<RestartAlt />}
-            onClick={handleOpenResetModal}
-            sx={{
-              fontWeight: 600,
-              textTransform: "none",
-              borderWidth: "2px",
-              "&:hover": { borderWidth: "2px" },
-            }}
-          >
-            Initialize Project
-          </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleOpenIncomeModal}
+              sx={{ fontWeight: 600, textTransform: "none" }}
+            >
+              + Add Side Income
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<RestartAlt />}
+              onClick={handleOpenResetModal}
+              sx={{
+                fontWeight: 600,
+                textTransform: "none",
+                borderWidth: "2px",
+                "&:hover": { borderWidth: "2px" },
+              }}
+            >
+              Initialize Project
+            </Button>
+          </Box>
         </Box>
 
         <Box sx={{ width: "100%", mb: 2 }}>
           <ShiftTrackerWidget key={refreshKey} />
+        </Box>
+
+        {/* 🌟 Render Pending Earnings Widget (automatically hides if empty) */}
+        <Box sx={{ width: "100%", mb: 2 }}>
+          <PendingEarningsWidget
+            key={refreshKey}
+            onClaimSuccess={fetchDashboardData}
+          />
         </Box>
 
         <Grid container spacing={2} sx={{ width: "100%" }} key={refreshKey}>
@@ -443,6 +509,72 @@ export default function Overview() {
         </Grid>
       </Box>
 
+      {/* Side Income Modal Dialog */}
+      <Dialog
+        open={isIncomeModalOpen}
+        onClose={handleCloseIncomeModal}
+        PaperProps={{
+          sx: {
+            backgroundColor: colors.primary[400],
+            padding: 2,
+            minWidth: "400px",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: colors.greenAccent[500] }}>
+          Record Side Hustle / Extra Income
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: colors.grey[200], mb: 2 }}>
+            Log ad-hoc earnings from outside your regular salary. This will be
+            added directly to your Wallet Balance.
+          </DialogContentText>
+          <Box
+            component="form"
+            onSubmit={handleSaveExtraIncome}
+            id="income-form"
+            sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
+          >
+            <TextField
+              label="Description (e.g., Freelance Project)"
+              variant="outlined"
+              fullWidth
+              value={incomeDescription}
+              onChange={(e) => setIncomeDescription(e.target.value)}
+            />
+            <TextField
+              label="Amount (RWF)"
+              type="number"
+              variant="outlined"
+              fullWidth
+              required
+              value={incomeAmount}
+              onChange={(e) => setIncomeAmount(e.target.value)}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={handleCloseIncomeModal}
+            sx={{ color: colors.grey[100], textTransform: "none" }}
+            disabled={isSubmittingIncome}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="income-form"
+            variant="contained"
+            color="secondary"
+            disabled={isSubmittingIncome || !incomeAmount}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {isSubmittingIncome ? "Processing..." : "Deposit to Wallet"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Administrative Master Reset Modal Dialog */}
       <Dialog
         open={isResetModalOpen}
         onClose={handleCloseResetModal}

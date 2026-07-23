@@ -103,3 +103,11 @@ export interface ActualInvestment {
   currentValue: number;
   lastUpdated: string;
 }
+
+export interface PendingEarningItem {
+  id: number;
+  amount: number;
+  description: string;
+  earned_date: string;
+  is_collected: boolean;
+}
