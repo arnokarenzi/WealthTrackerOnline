@@ -79,7 +79,7 @@ export const getDashboard = async (req, res) => {
     const remainingToMax = MAX_SHIFT_LETTERS - shiftLetters;
 
     const dailyMax = MAX_SHIFT_LETTERS / totalDaysInShift;
-    const dailyMin = 650 / totalDaysInShift;
+    const dailyMin = 675 / totalDaysInShift;
 
     const maxPace = shiftDay * dailyMax;
     const minPace = shiftDay * dailyMin;
