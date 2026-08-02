@@ -17,7 +17,6 @@ import {
   Button,
 } from "@mui/material";
 import { Security, ShowChart, AccountBalance, Edit } from "@mui/icons-material";
-import TransactionHistory from "./components/TransactionHistory";
 import { tokens } from "../../assets/theme";
 import { financeApi } from "../../services/api";
 
@@ -320,8 +319,8 @@ export default function Investments() {
               </Box>
             </Grid>
 
-            {/* 📈 Left Column: Live Compound Investment Portfolios */}
-            <Grid item xs={12} md={6}>
+            {/* 📈 Full Width Row: Live Compound Investment Portfolios */}
+            <Grid item xs={12}>
               <Box
                 sx={{
                   backgroundColor: colors.primary[400],
@@ -453,11 +452,6 @@ export default function Investments() {
                   )}
                 </Stack>
               </Box>
-            </Grid>
-
-            {/* 📑 Right Column: Prebuilt Transaction History Log */}
-            <Grid item xs={12} md={6}>
-              <TransactionHistory />
             </Grid>
           </Grid>
         )}
