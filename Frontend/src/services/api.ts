@@ -71,9 +71,24 @@ export const financeApi = {
     await apiClient.post("/reset-all-data");
   },
 
-  resetMonthAndExport: async (): Promise<{ message: string }> => {
-    const response = await apiClient.post("/monthly-budget/reset");
-    return response.data;
+  resetMonthAndExport: async (): Promise<void> => {
+    const response = await apiClient.post(
+      "/monthly-budget/reset",
+      {},
+      {
+        responseType: "blob",
+      },
+    );
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `daily-expenses-${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   },
 
   getExpenses: async (): Promise<Expense[]> => {
@@ -90,7 +105,6 @@ export const financeApi = {
     await apiClient.delete(`/daily-expenses/${id}`);
   },
 
-  // --- ADD INSIDE financeApi object in api.ts ---
   addExtraIncome: async (data: {
     amount: number;
     description: string;
@@ -99,7 +113,6 @@ export const financeApi = {
     return response.data;
   },
 
-  // Inside your financeApi object:
   getPendingEarnings: async (): Promise<PendingEarningItem[]> => {
     const response = await apiClient.get("/pending-earnings");
     return response.data;
@@ -184,6 +197,40 @@ export const financeApi = {
   }): Promise<{ message: string }> => {
     const response = await apiClient.post("/savings-goals", data);
     return response.data;
+  },
+
+  // --- SPECIALIZED RESERVES ENDPOINTS ---
+  getEmergencyFund: async (): Promise<{
+    current_amount?: number;
+    target_amount?: number;
+  }> => {
+    const response = await apiClient.get("/emergency");
+    return response.data;
+  },
+
+  updateEmergencyFund: async (current_amount: number): Promise<void> => {
+    await apiClient.put("/emergency", { current_amount });
+  },
+
+  getSchoolFees: async (): Promise<{ cumulative?: number }> => {
+    const response = await apiClient.get("/school-fees");
+    return response.data;
+  },
+
+  updateSchoolFees: async (amountSaved: number): Promise<void> => {
+    await apiClient.put("/school-fees", { amountSaved });
+  },
+
+  getInvestmentReserve: async (): Promise<{
+    amount?: number;
+    current_amount?: number;
+  }> => {
+    const response = await apiClient.get("/investments/reserve");
+    return response.data;
+  },
+
+  updateInvestmentReserve: async (amount: number): Promise<void> => {
+    await apiClient.put("/investments/reserve", { amount });
   },
 };
 

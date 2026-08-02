@@ -6,7 +6,6 @@ import CustomToolbar from "../../../components/CustomToolbar";
 import { incomeSourcesSchema } from "../data/budget";
 import { MonthlyBudget } from "../../../types/api";
 
-// 🚀 Removed the unused 'onRefresh' argument to clear the parameter flag
 export default function IncomeSources({ budget }: { budget: MonthlyBudget }) {
   const columns: GridColDef[] = [
     ...incomeSourcesSchema,
@@ -32,18 +31,6 @@ export default function IncomeSources({ budget }: { budget: MonthlyBudget }) {
       received: "Synced",
       category: "Employment",
       description: "Calculated automatically via shifts engine logs",
-      taxRate: 0,
-    },
-    {
-      id: 2,
-      sourceName: "Other Auxiliary Income",
-      amount: budget.otherIncome ?? 0,
-      paymentMethod: "Flexible",
-      frequency: "Variable",
-      status: "Active",
-      received: "Current Cycle",
-      category: "Side Hustle",
-      description: "Manually managed income streams",
       taxRate: 0,
     },
   ];

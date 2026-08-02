@@ -14,7 +14,6 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import BudgetAllocation from "./components/BudgetAllocation";
 import IncomeSources from "./components/IncomeSources";
 import ExpenseLimits from "./components/ExpenseLimits";
-import Savings from "./components/Savings";
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
 import ExpenseForm from "./components/ui/ExpenseForm";
@@ -24,8 +23,6 @@ export default function Budget() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
-
-  // 🚀 Added unique render key to break cache and force component remounts
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   const fetchLiveDatabaseData = async () => {
@@ -42,7 +39,6 @@ export default function Budget() {
     }
   };
 
-  // 🚀 Async Handler for Reset Month Operation
   const handleResetMonth = async (): Promise<void> => {
     const confirmAction = window.confirm(
       "Are you sure you want to reset the current month parameters? This action will restore your configurations back to default baselines.",
@@ -105,7 +101,6 @@ export default function Budget() {
 
   return (
     <Box sx={{ padding: 2 }}>
-      {/* Header Layout Container */}
       <Box
         sx={{
           display: "flex",
@@ -131,7 +126,7 @@ export default function Budget() {
             onClick={handleResetMonth}
             sx={{ fontWeight: 600, borderRadius: "8px" }}
           >
-            Reset Month
+            Reset
           </Button>
 
           <Button
@@ -146,7 +141,6 @@ export default function Budget() {
         </Stack>
       </Box>
 
-      {/* 🚀 Attached key={refreshKey} here to explicitly break child component caching rules */}
       <Grid container spacing={2} key={refreshKey}>
         <Grid item xs={12} md={6} lg={8}>
           <IncomeSources budget={budget} />
@@ -154,11 +148,8 @@ export default function Budget() {
         <Grid item xs={12} md={6} lg={4}>
           <BudgetAllocation budget={budget} />
         </Grid>
-        <Grid item xs={12} md={6} lg={6}>
+        <Grid item xs={12} md={12} lg={12}>
           <ExpenseLimits budget={budget} />
-        </Grid>
-        <Grid item xs={12} md={6} lg={6}>
-          <Savings budget={budget} />
         </Grid>
       </Grid>
 
@@ -173,7 +164,7 @@ export default function Budget() {
           currentBudget={budget}
           onSaveSuccess={async () => {
             await fetchLiveDatabaseData();
-            setRefreshKey((prev) => prev + 1); // 🚀 Refreshes UI grids dynamically on form submission
+            setRefreshKey((prev) => prev + 1);
           }}
           onClose={() => setIsFormOpen(false)}
         />

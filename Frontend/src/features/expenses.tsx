@@ -38,14 +38,17 @@ interface ExpenseItem {
   expenseDate: string;
 }
 
-const EXPENSE_CATEGORIES: string[] = [
-  "Food & Dining",
-  "Transportation",
-  "Utilities",
-  "Entertainment",
-  "Shopping",
-  "Healthcare",
-  "Miscellaneous",
+const EXPENSE_CATEGORIES = [
+  { label: "Food & Dining", value: "food" },
+  { label: "Phone & Internet", value: "phoneInternet" },
+  { label: "Electricity & Water", value: "electricityWater" },
+  { label: "Medical", value: "medical" },
+  { label: "Family Support", value: "familySupport" },
+  { label: "Rent", value: "rent" },
+  { label: "School Saving", value: "schoolSaving" },
+  { label: "Emergency Fund", value: "emergencyFund" },
+  { label: "Investment", value: "investment" },
+  { label: "Miscellaneous", value: "miscellaneous" },
 ];
 
 export default function Expenses() {
@@ -279,8 +282,8 @@ export default function Expenses() {
                   required
                 >
                   {EXPENSE_CATEGORIES.map((option) => (
-                    <MenuItem key={option} value={option}>
-                      {option}
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
                     </MenuItem>
                   ))}
                 </TextField>

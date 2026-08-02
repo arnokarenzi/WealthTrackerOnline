@@ -27,7 +27,6 @@ export const getBudget = async (req, res) => {
 export const updateBudget = async (req, res) => {
   const {
     salary,
-    otherIncome,
     rent,
     schoolSaving,
     phoneInternet,
@@ -52,7 +51,7 @@ export const updateBudget = async (req, res) => {
   try {
     const sql = `
       UPDATE MonthlyBudget 
-      SET salary = ?, otherIncome = ?, rent = ?, schoolSaving = ?, phoneInternet = ?,
+      SET salary = ?, rent = ?, schoolSaving = ?, phoneInternet = ?,
           electricityWater = ?, food = ?, miscellaneous = ?, medical = ?, familySupport = ?,
           emergencyFund = ?, investment = ?, balance = ?, month = ?, year = ?, translatedLetters = ?,
           recommendedEssentials = ?, recommendedEmergency = ?, recommendedInvest = ?,
@@ -61,7 +60,6 @@ export const updateBudget = async (req, res) => {
     `;
     await pool.query(sql, [
       n(salary),
-      n(otherIncome),
       n(rent),
       n(schoolSaving),
       n(phoneInternet),
@@ -88,7 +86,6 @@ export const updateBudget = async (req, res) => {
   }
 };
 
-// Add this controller function in your backend
 export const addExtraIncome = async (req, res) => {
   try {
     const { amount, description } = req.body;
@@ -98,7 +95,6 @@ export const addExtraIncome = async (req, res) => {
       return res.status(400).json({ error: "Invalid amount provided." });
     }
 
-    // Directly increase the active wallet balance in MySQL
     await pool.query(
       "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
       [numAmount],
@@ -130,7 +126,7 @@ export const initializeProject = async (req, res) => {
     await connection.query(
       `
       UPDATE MonthlyBudget 
-      SET salary = 0, otherIncome = 0, rent = 0, schoolSaving = 0, 
+      SET salary = 0, rent = 0, schoolSaving = 0, 
           phoneInternet = 0, electricityWater = 0, food = 0, miscellaneous = 0, 
           medical = 0, familySupport = 0, emergencyFund = 0, investment = 0, 
           balance = 0, month = ?, year = ?, translatedLetters = 0, 
@@ -158,6 +154,10 @@ export const resetMonth = async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    const [expenses] = await connection.query(
+      "SELECT * FROM DailyExpense ORDER BY expenseDate DESC",
+    );
+
     const [budgetRows] = await connection.query(
       "SELECT * FROM MonthlyBudget WHERE id = 1",
     );
@@ -166,7 +166,6 @@ export const resetMonth = async (req, res) => {
       const b = budgetRows[0];
       const investmentCapital = v(b.investment);
 
-      // 1. Investments (Specialized Table Only)
       if (investmentCapital > 0) {
         await connection.query(
           `INSERT INTO ActualInvestments (asset_name, principal_invested, current_value, month, year) 
@@ -181,7 +180,6 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // 2. School Fees (Specialized Table Only)
       const schoolFeesSaving = v(b.schoolSaving);
       if (schoolFeesSaving > 0) {
         await connection.query(
@@ -191,7 +189,6 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // 3. Emergency Fund (Specialized Table Only)
       const emergencySaving = v(b.emergencyFund);
       if (emergencySaving > 0) {
         await connection.query(
@@ -202,27 +199,13 @@ export const resetMonth = async (req, res) => {
         );
       }
 
-      // NOTE: The loop updating `SavingsGoals` has been completely removed here.
-      // This ensures Emergency, School Fees, and Investments never spill over
-      // into the generic Savings Goals page.
-
-      // --- PENDING EARNINGS ROLLOVER ---
       const expectedSalary = v(b.salary);
-      const otherIncome = v(b.otherIncome);
 
       if (expectedSalary > 0) {
         await connection.query(
           `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
            VALUES (?, ?, NOW(), FALSE)`,
           [expectedSalary, "Shift Salary Rollover"],
-        );
-      }
-
-      if (otherIncome > 0) {
-        await connection.query(
-          `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
-           VALUES (?, ?, NOW(), FALSE)`,
-          [otherIncome, "Other Income / Auxiliary Rollover"],
         );
       }
 
@@ -236,7 +219,6 @@ export const resetMonth = async (req, res) => {
            month = ?, 
            year = ?,
            salary = 0,
-           otherIncome = 0,
            schoolSaving = 0, 
            emergencyFund = 0, 
            investment = 0, 
@@ -249,12 +231,26 @@ export const resetMonth = async (req, res) => {
     }
 
     await connection.query("DELETE FROM DailyExpense");
-
     await connection.commit();
-    res.json({
-      message:
-        "Shift cycle processed successfully! Specialized funds routed to dedicated tables without mixing into savings goals.",
-    });
+
+    const csvHeaders = "ID,Date,Description,Category,Amount,Notes\n";
+    const csvRows = expenses
+      .map((item) => {
+        const date = item.expenseDate
+          ? new Date(item.expenseDate).toISOString().split("T")[0]
+          : "";
+        return `"${item.id}","${date}","${item.description || ""}","${item.category || ""}","${item.amount || 0}","${item.notes || ""}"`;
+      })
+      .join("\n");
+
+    const csvContent = csvHeaders + csvRows;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=daily-expenses-backup.csv",
+    );
+    return res.status(200).send(csvContent);
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });

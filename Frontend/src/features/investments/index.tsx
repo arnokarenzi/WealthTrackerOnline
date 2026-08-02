@@ -69,26 +69,13 @@ export default function Investments() {
 
   const gatherVaultData = async () => {
     try {
-      const secureApi = financeApi as typeof financeApi & {
-        getEmergencyFund?: () => Promise<{
-          current_amount?: number;
-          target_amount?: number;
-        }>;
-        getSchoolFees?: () => Promise<{ cumulative?: number }>;
-        getActualInvestments: () => Promise<ActualInvestment[]>;
-      };
-
-      const [emergencyData, schoolData, investmentData] = await Promise.all([
-        secureApi.getEmergencyFund
-          ? secureApi.getEmergencyFund()
-          : Promise.resolve({ current_amount: 0 }),
-        secureApi.getSchoolFees
-          ? secureApi.getSchoolFees()
-          : Promise.resolve({ cumulative: 0 }),
-        secureApi.getActualInvestments
-          ? secureApi.getActualInvestments()
-          : Promise.resolve([]),
-      ]);
+      const [emergencyData, schoolData, investmentReserveData, investmentData] =
+        await Promise.all([
+          financeApi.getEmergencyFund(),
+          financeApi.getSchoolFees(),
+          financeApi.getInvestmentReserve(),
+          financeApi.getActualInvestments(),
+        ]);
 
       setReserves((prev) => ({
         ...prev,
@@ -99,6 +86,14 @@ export default function Investments() {
         "School Fees": {
           ...prev["School Fees"],
           current: Number(schoolData?.cumulative || 0),
+        },
+        Investments: {
+          ...prev.Investments,
+          current: Number(
+            investmentReserveData?.amount ||
+              investmentReserveData?.current_amount ||
+              0,
+          ),
         },
       }));
 
@@ -134,16 +129,10 @@ export default function Investments() {
 
     try {
       setSubmitting(true);
-      const secureApi = financeApi as typeof financeApi & {
-        updateInvestmentValue: (id: number, value: number) => Promise<void>;
-      };
-
-      if (secureApi.updateInvestmentValue) {
-        await secureApi.updateInvestmentValue(
-          activeAsset.id,
-          Number(assetInputValue),
-        );
-      }
+      await financeApi.updateInvestmentValue(
+        activeAsset.id,
+        Number(assetInputValue),
+      );
 
       await gatherVaultData();
       handleCloseAssetEdit();
@@ -175,25 +164,13 @@ export default function Investments() {
       setSubmitting(true);
       const val = Number(reserveInputValue);
 
-      // Explicit API requests to persist data in the database
+      // Cleanly route updates through centralized service layer
       if (activeCategoryTitle === "Emergency") {
-        await fetch("/api/emergency", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ current_amount: val }),
-        });
+        await financeApi.updateEmergencyFund(val);
       } else if (activeCategoryTitle === "School Fees") {
-        await fetch("/api/school-fees", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amountSaved: val }),
-        });
+        await financeApi.updateSchoolFees(val);
       } else if (activeCategoryTitle === "Investments") {
-        await fetch("/api/investments/reserve", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: val }),
-        });
+        await financeApi.updateInvestmentReserve(val);
       }
 
       await gatherVaultData();

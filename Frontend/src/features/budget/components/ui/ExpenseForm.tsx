@@ -8,7 +8,6 @@ import {
 import { Formik } from "formik";
 import * as yup from "yup";
 import { useState } from "react";
-// 🛡️ Import the strict type to replace 'any'
 import { MonthlyBudget } from "../../../../types/api";
 
 const validationSchema = yup.object().shape({
@@ -17,7 +16,7 @@ const validationSchema = yup.object().shape({
 });
 
 type ExpenseFormProps = {
-  currentBudget: MonthlyBudget; // 🚀 Replaced 'any' with strict typing
+  currentBudget: MonthlyBudget;
   onSaveSuccess: () => Promise<void>;
   onClose: () => void;
 };
@@ -29,11 +28,9 @@ const ExpenseForm = ({
 }: ExpenseFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Inside /src/features/budget/components/ExpenseForm.tsx
-  // Inside your ExpenseForm.tsx file, verify or update the fieldsList array:
+  // Removed auxiliary income and savings targets from budget modifications
   const fieldsList = [
-    { label: "Other Auxiliary Income", key: "otherIncome" }, // 🚀 Added for your manual income streams
-    { label: "Shift Salary Base (Logs)", key: "salary" }, // 🚀 Added for manual adjustments to salary roots
+    { label: "Shift Salary Base (Logs)", key: "salary" },
     { label: "Core Rent Base", key: "rent" },
     { label: "Food Provisions", key: "food" },
     { label: "Electricity & Water Grid", key: "electricityWater" },
@@ -41,9 +38,6 @@ const ExpenseForm = ({
     { label: "Medical Safeguards", key: "medical" },
     { label: "Family Direct Support", key: "familySupport" },
     { label: "Miscellaneous Buffers", key: "miscellaneous" },
-    { label: "Emergency Reserves Target", key: "emergencyFund" }, // 🚀 Added to manually customize saving allocations
-    { label: "Investment Capital Roots", key: "investment" }, // 🚀 Added
-    { label: "School Fees Buffer Fund", key: "schoolSaving" }, // 🚀 Added
   ];
 
   const handleFormSubmit = async (values: {
@@ -57,7 +51,6 @@ const ExpenseForm = ({
         [values.fieldKey]: values.limit,
       };
 
-      // 🗺️ Adopted IDE path correction
       const { financeApi } = await import("../../../../services/api");
       await financeApi.updateBudgetPlan(updatedBudget);
 
