@@ -9,6 +9,7 @@ import investmentRoutes from "./routes/investmentRoutes.js";
 import allocationRoutes from "./routes/allocationRoutes.js";
 import gratitudeRoutes from "./routes/gratitudeRoutes.js";
 import alertsRoutes from "./routes/alertsRoutes.js";
+import emergencyRoutes from "./routes/emergencyRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import pendingEarningsRouter from "./routes/pendingEarningsRoutes.js"; // 🌟 Added missing import
 
@@ -29,11 +30,13 @@ app.use(cors());
 app.use(express.json());
 
 // Main App API Routes
+app.use("/api/emergency", emergencyRoutes);
 app.use("/api/monthly-budget", monthlyBudgetRoutes);
 app.use("/api/daily-expenses", dailyExpenseRoutes);
 app.use("/api/savings-goals", savingsGoalRoutes);
 app.use("/api/school-fees", schoolFeesRoutes);
 app.use("/api/actual-investments", investmentRoutes);
+app.use("/api/investments", investmentRoutes);
 app.use("/api/allocation", allocationRoutes);
 app.use("/api/gratitude", gratitudeRoutes);
 app.use("/api/alerts", alertsRoutes);

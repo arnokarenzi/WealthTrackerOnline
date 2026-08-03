@@ -149,58 +149,28 @@ export const initializeProject = async (req, res) => {
   }
 };
 
+// 🔄 CLEAN RESET: Only rolls salary into PendingEarnings. No auto-transfers to Emergency, School, or Investments.
 export const resetMonth = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
+    // 1. Fetch current shift expenses for CSV backup
     const [expenses] = await connection.query(
       "SELECT * FROM DailyExpense ORDER BY expenseDate DESC",
     );
 
+    // 2. Fetch current budget state
     const [budgetRows] = await connection.query(
       "SELECT * FROM MonthlyBudget WHERE id = 1",
     );
 
     if (budgetRows.length > 0) {
       const b = budgetRows[0];
-      const investmentCapital = v(b.investment);
-
-      if (investmentCapital > 0) {
-        await connection.query(
-          `INSERT INTO ActualInvestments (asset_name, principal_invested, current_value, month, year) 
-           VALUES (?, ?, ?, ?, ?)`,
-          [
-            "Shift Rollover Portfolio",
-            investmentCapital,
-            investmentCapital,
-            b.month,
-            b.year,
-          ],
-        );
-      }
-
-      const schoolFeesSaving = v(b.schoolSaving);
-      if (schoolFeesSaving > 0) {
-        await connection.query(
-          `INSERT INTO SchoolFees (month, amountSaved, cumulative) 
-           VALUES (?, ?, (SELECT IFNULL(SUM(amountSaved), 0) + ? FROM SchoolFees AS tmp))`,
-          [String(b.month), schoolFeesSaving, schoolFeesSaving],
-        );
-      }
-
-      const emergencySaving = v(b.emergencyFund);
-      if (emergencySaving > 0) {
-        await connection.query(
-          `UPDATE EmergencyFund 
-           SET current_amount = current_amount + ? 
-           WHERE user_id = 1`,
-          [emergencySaving],
-        );
-      }
-
       const expectedSalary = v(b.salary);
 
+      // 🌟 STAGE SALARY TO PENDING EARNINGS:
+      // Earned shift salary moves to pending queue awaiting manual claim/collection.
       if (expectedSalary > 0) {
         await connection.query(
           `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
@@ -213,6 +183,7 @@ export const resetMonth = async (req, res) => {
       const currentRealYear = new Date().getFullYear();
       const currentWalletBalance = v(b.balance);
 
+      // 3. Reset budget line items for the new shift cycle (preserving wallet balance)
       await connection.query(
         `UPDATE MonthlyBudget 
          SET 
@@ -230,9 +201,11 @@ export const resetMonth = async (req, res) => {
       );
     }
 
+    // 4. Clear daily expenses log for the new cycle
     await connection.query("DELETE FROM DailyExpense");
     await connection.commit();
 
+    // 5. Generate and download CSV backup stream
     const csvHeaders = "ID,Date,Description,Category,Amount,Notes\n";
     const csvRows = expenses
       .map((item) => {

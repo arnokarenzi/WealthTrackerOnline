@@ -1,5 +1,4 @@
 import DailyExpense from "../models/DailyExpense.js";
-import { MonthlyBudget } from "../models/MonthlyBudget.js";
 import { pool } from "../models/MonthlyBudget.js";
 
 const n = (v) => {
@@ -20,88 +19,214 @@ export const getExpenses = async (req, res) => {
 };
 
 // ==========================================
-// 2. ADD EXPENSE (WITH AUTO-WALLET BALANCE DEDUCTION)
+// 2. ADD EXPENSE (INCREMENT MATCHING RESERVES)
 // ==========================================
 export const addExpense = async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS InvestmentReserve (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00
+      )
+    `);
+  } catch (tblErr) {
+    console.warn("InvestmentReserve table check warning:", tblErr.message);
+  }
+
+  const connection = await pool.getConnection();
+
   try {
     const { expenseDate, description, category, amount, notes } = req.body;
     const numAmount = n(amount);
 
-    const validColumns = [
-      "phoneInternet",
-      "electricityWater",
-      "medical",
-      "familySupport",
-      "miscellaneous",
-      "food",
-      "rent",
-      "schoolSaving",
-      "emergencyFund",
-      "investment",
-    ];
+    const catInput = (category || "").toString().toLowerCase().trim();
+    let finalCategory = "miscellaneous";
 
-    const finalCategory = validColumns.includes(category)
-      ? category
-      : "miscellaneous";
+    if (catInput.includes("emergency")) finalCategory = "emergencyFund";
+    else if (catInput.includes("school")) finalCategory = "schoolSaving";
+    else if (catInput.includes("invest")) finalCategory = "investment";
+    else finalCategory = category || "miscellaneous";
 
-    // Capture the MySQL insert result to obtain the auto-incremented ID
-    const [result] = await DailyExpense.create({
-      expenseDate,
-      description,
-      category: finalCategory,
-      amount: numAmount,
-      notes: notes || "",
-    });
+    await connection.beginTransaction();
 
-    // Automatically deduct the expense amount from the active wallet balance
-    await pool.query(
-      "UPDATE MonthlyBudget SET balance = balance - ? WHERE id = 1",
-      [numAmount],
+    // 1. Insert daily expense record
+    const [result] = await connection.query(
+      "INSERT INTO DailyExpense (expenseDate, description, category, amount, notes) VALUES (?, ?, ?, ?, ?)",
+      [
+        expenseDate || new Date().toISOString().split("T")[0],
+        description || "",
+        finalCategory,
+        numAmount,
+        notes || "",
+      ],
     );
 
+    // 2. Deduct expense amount from active wallet balance
+    const [mbRows] = await connection.query(
+      "SELECT id FROM MonthlyBudget WHERE id = 1",
+    );
+    if (mbRows.length > 0) {
+      await connection.query(
+        "UPDATE MonthlyBudget SET balance = balance - ? WHERE id = 1",
+        [numAmount],
+      );
+    }
+
+    // 3. Increment the investment / cash reserve card dynamically
+    if (finalCategory === "emergencyFund") {
+      const [emRows] = await connection.query(
+        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1",
+      );
+      if (emRows.length > 0) {
+        await connection.query(
+          "UPDATE EmergencyFund SET current_amount = COALESCE(current_amount, 0) + ? WHERE id = ?",
+          [numAmount, emRows[0].id],
+        );
+      } else {
+        await connection.query(
+          "INSERT INTO EmergencyFund (id, current_amount) VALUES (1, ?)",
+          [numAmount],
+        );
+      }
+    } else if (finalCategory === "schoolSaving") {
+      const currentMonthInt = new Date().getMonth() + 1;
+      const [existing] = await connection.query(
+        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1",
+      );
+
+      if (existing.length > 0) {
+        await connection.query(
+          "UPDATE SchoolFees SET amountSaved = COALESCE(amountSaved, 0) + ?, cumulative = COALESCE(cumulative, 0) + ? WHERE id = ?",
+          [numAmount, numAmount, existing[0].id],
+        );
+      } else {
+        await connection.query(
+          "INSERT INTO SchoolFees (month, amountSaved, cumulative) VALUES (?, ?, ?)",
+          [currentMonthInt, numAmount, numAmount],
+        );
+      }
+    } else if (finalCategory === "investment") {
+      const [invRows] = await connection.query(
+        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1",
+      );
+      if (invRows.length > 0) {
+        await connection.query(
+          "UPDATE InvestmentReserve SET amount = COALESCE(amount, 0) + ? WHERE id = ?",
+          [numAmount, invRows[0].id],
+        );
+      } else {
+        await connection.query(
+          "INSERT INTO InvestmentReserve (id, amount) VALUES (1, ?)",
+          [numAmount],
+        );
+      }
+    }
+
+    await connection.commit();
+
     res.status(201).json({
-      message: "Expense saved and Wallet balance updated!",
-      id: result.insertId, // 🌟 Return the actual database ID back to the frontend
+      message: "Expense saved, wallet deducted, and reserve card updated!",
+      id: result.insertId,
       expenseDate,
       description,
       category: finalCategory,
       amount: numAmount,
     });
   } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (rbErr) {
+      // Ignore rollback failure if transaction was already closed
+    }
     console.error("Add Expense Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
 // ==========================================
-// 3. DELETE EXPENSE (WITH AUTO-WALLET BALANCE RESTORE)
+// 3. DELETE EXPENSE (RESTORE WALLET & DEDUCT MATCHING RESERVE)
 // ==========================================
 export const deleteExpense = async (req, res) => {
+  const connection = await pool.getConnection();
+
   try {
     const expenseId = req.params.id;
 
-    const [expenseRows] = await pool.query(
-      "SELECT expenseDate, amount FROM DailyExpense WHERE id = ?",
+    const [expenseRows] = await connection.query(
+      "SELECT expenseDate, category, amount FROM DailyExpense WHERE id = ?",
       [expenseId],
     );
 
     if (expenseRows.length === 0) {
+      connection.release();
       return res.status(404).json({ error: "Expense not found" });
     }
 
-    const expenseAmount = n(expenseRows[0].amount);
+    const { category, amount } = expenseRows[0];
+    const expenseAmount = n(amount);
 
-    await DailyExpense.delete(expenseId);
+    await connection.beginTransaction();
 
-    // Automatically restore the deleted expense amount back to the wallet balance
-    await pool.query(
+    await connection.query("DELETE FROM DailyExpense WHERE id = ?", [
+      expenseId,
+    ]);
+
+    await connection.query(
       "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
       [expenseAmount],
     );
 
-    res.json({ message: "Expense deleted and balance updated!" });
+    const catLower = (category || "").toLowerCase();
+
+    if (catLower.includes("emergency")) {
+      const [emRows] = await connection.query(
+        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1",
+      );
+      if (emRows.length > 0) {
+        await connection.query(
+          "UPDATE EmergencyFund SET current_amount = GREATEST(0, COALESCE(current_amount, 0) - ?) WHERE id = ?",
+          [expenseAmount, emRows[0].id],
+        );
+      }
+    } else if (catLower.includes("school")) {
+      const [existing] = await connection.query(
+        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1",
+      );
+
+      if (existing.length > 0) {
+        await connection.query(
+          "UPDATE SchoolFees SET amountSaved = GREATEST(0, COALESCE(amountSaved, 0) - ?), cumulative = GREATEST(0, COALESCE(cumulative, 0) - ?) WHERE id = ?",
+          [expenseAmount, expenseAmount, existing[0].id],
+        );
+      }
+    } else if (catLower.includes("invest")) {
+      const [invRows] = await connection.query(
+        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1",
+      );
+      if (invRows.length > 0) {
+        await connection.query(
+          "UPDATE InvestmentReserve SET amount = GREATEST(0, COALESCE(amount, 0) - ?) WHERE id = ?",
+          [expenseAmount, invRows[0].id],
+        );
+      }
+    }
+
+    await connection.commit();
+
+    res.json({
+      message: "Expense deleted, wallet restored, and reserve card adjusted!",
+    });
   } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (rbErr) {
+      // Ignore rollback failure if transaction was already closed
+    }
     console.error("Delete Expense Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };

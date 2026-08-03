@@ -67,7 +67,7 @@ export const MonthlyBudget = {
     }
   },
 
-  // 3. Reset Month Rollover: Stages expected salary into PendingEarnings
+  // Reset Month Rollover: Stages expected salary into PendingEarnings only
   resetMonth: async () => {
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
     if (rows.length === 0) return 0;
@@ -76,6 +76,7 @@ export const MonthlyBudget = {
     const expectedSalary = Number(b.salary) || 0;
     const currentWalletBalance = Number(b.balance) || 0;
 
+    // Stage salary into PendingEarnings
     if (expectedSalary > 0) {
       await pool.query(
         `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
@@ -84,10 +85,14 @@ export const MonthlyBudget = {
       );
     }
 
+    // Reset shift parameters
     await pool.query(
       `UPDATE MonthlyBudget 
        SET balance = ?, 
            salary = 0, 
+           schoolSaving = 0,
+           emergencyFund = 0,
+           investment = 0,
            translatedLetters = 0, 
            shiftLetters = 0 
        WHERE id = 1`,
@@ -95,27 +100,5 @@ export const MonthlyBudget = {
     );
 
     return currentWalletBalance;
-  },
-
-  // 4. Recalculate balance based on actual daily expenses subtracted from wallet balance
-  recalculateBalance: async (month, year) => {
-    const numericMonth = Number(month);
-    const numericYear = Number(year);
-
-    const [budgets] = await pool.query(
-      "SELECT id, balance FROM MonthlyBudget WHERE month = ? AND year = ?",
-      [numericMonth, numericYear],
-    );
-    if (budgets.length === 0) return 0;
-
-    const currentBalance = Number(budgets[0].balance) || 0;
-
-    const [expenseResult] = await pool.query(
-      "SELECT SUM(amount) as totalExpenses FROM DailyExpense WHERE MONTH(expenseDate) = ? AND YEAR(expenseDate) = ?",
-      [numericMonth, numericYear],
-    );
-    const totalExpenses = Number(expenseResult[0].totalExpenses) || 0;
-
-    return currentBalance;
   },
 };

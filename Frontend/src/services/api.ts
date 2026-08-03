@@ -27,7 +27,7 @@ const apiClient = axios.create({
 });
 
 export const financeApi = {
-  // --- EXISTING ENDPOINTS ---
+  // --- DASHBOARD & BUDGET ENDPOINTS ---
   getDashboardSummary: async (): Promise<DashboardSummary> => {
     const response =
       await apiClient.get<DashboardSummary>("/dashboard/summary");
@@ -63,8 +63,8 @@ export const financeApi = {
     await apiClient.put("/monthly-budget", budget);
   },
 
-  initializeProjectDefaults: async (): Promise<void> => {
-    await apiClient.post("/monthly-budget/initialize");
+  initializeProjectDefaults: async (passphrase?: string): Promise<void> => {
+    await apiClient.post("/monthly-budget/initialize", { passphrase });
   },
 
   resetAllData: async (): Promise<void> => {
@@ -91,6 +91,7 @@ export const financeApi = {
     link.remove();
   },
 
+  // --- EXPENSES ENDPOINTS ---
   getExpenses: async (): Promise<Expense[]> => {
     const response = await apiClient.get<Expense[]>("/daily-expenses");
     return response.data;
@@ -122,6 +123,7 @@ export const financeApi = {
     await apiClient.post(`/pending-earnings/claim/${id}`);
   },
 
+  // --- INVESTMENTS & PORTFOLIOS ---
   getInvestments: async (
     month: number,
     year: number,
@@ -177,6 +179,19 @@ export const financeApi = {
     });
   },
 
+  deployInvestmentReserve: async (data: {
+    assetName: string;
+    amount: number;
+    assetType?: string;
+  }): Promise<{ message: string }> => {
+    const response = await apiClient.post("/actual-investments/deploy", {
+      asset_name: data.assetName,
+      amount: data.amount,
+      asset_type: data.assetType || "Bond",
+    });
+    return response.data;
+  },
+
   // --- SAVINGS GOALS ENDPOINTS ---
   getSavingsGoals: async (): Promise<SavingsGoal[]> => {
     const response = await apiClient.get<SavingsGoal[]>("/savings-goals");
@@ -202,7 +217,9 @@ export const financeApi = {
   // --- SPECIALIZED RESERVES ENDPOINTS ---
   getEmergencyFund: async (): Promise<{
     current_amount?: number;
+    currentAmount?: number;
     target_amount?: number;
+    targetAmount?: number;
   }> => {
     const response = await apiClient.get("/emergency");
     return response.data;
@@ -212,18 +229,21 @@ export const financeApi = {
     await apiClient.put("/emergency", { current_amount });
   },
 
-  getSchoolFees: async (): Promise<{ cumulative?: number }> => {
-    const response = await apiClient.get("/school-fees");
+  getSchoolFees: async (): Promise<unknown> => {
+    const response = await apiClient.get<unknown>("/school-fees");
     return response.data;
   },
 
   updateSchoolFees: async (amountSaved: number): Promise<void> => {
-    await apiClient.put("/school-fees", { amountSaved });
+    await apiClient.post("/school-fees", { amountSaved });
   },
 
   getInvestmentReserve: async (): Promise<{
     amount?: number;
     current_amount?: number;
+    currentAmount?: number;
+    target_amount?: number;
+    targetAmount?: number;
   }> => {
     const response = await apiClient.get("/investments/reserve");
     return response.data;

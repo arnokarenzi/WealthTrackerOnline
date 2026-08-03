@@ -34,3 +34,42 @@ export const resetSchoolFeesOnly = async (req, res) => {
     connection.release();
   }
 };
+
+export const addSchoolFees = async (req, res) => {
+  const { amountSaved } = req.body;
+  // Use numeric month (1-12) to match MySQL INT column definition
+  const currentMonth = new Date().getMonth() + 1;
+
+  try {
+    const numAmount = Number(amountSaved);
+    if (isNaN(numAmount) || numAmount < 0) {
+      return res.status(400).json({ error: "Invalid amount provided." });
+    }
+
+    // Check if an entry exists for the current month
+    const [existing] = await pool.query(
+      "SELECT id FROM SchoolFees WHERE month = ? ORDER BY id DESC LIMIT 1",
+      [currentMonth],
+    );
+
+    if (existing.length > 0) {
+      // Overwrite the balance directly for the current month
+      await pool.query(
+        "UPDATE SchoolFees SET amountSaved = ?, cumulative = ? WHERE id = ?",
+        [numAmount, numAmount, existing[0].id],
+      );
+    } else {
+      // Insert a new baseline record with the specified balance
+      await pool.query(
+        "INSERT INTO SchoolFees (month, amountSaved, cumulative) VALUES (?, ?, ?)",
+        [currentMonth, numAmount, numAmount],
+      );
+    }
+
+    res
+      .status(200)
+      .json({ message: "School fees balance updated successfully!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

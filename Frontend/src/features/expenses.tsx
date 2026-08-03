@@ -27,9 +27,8 @@ import {
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import { financeApi } from "../services/api";
-import { MonthlyBudget } from "../types/api";
+import { Expense, MonthlyBudget } from "../types/api";
 
-// 📑 Strict Interface aligned exactly with MySQL DailyExpense table columns
 interface ExpenseItem {
   id: string;
   description: string;
@@ -55,13 +54,11 @@ export default function Expenses() {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
-  // 📊 Live state management linked directly to backend sync
   const [expenseList, setExpenseList] = useState<ExpenseItem[]>([]);
-  const [expectedIncome, setExpectedIncome] = useState<number>(0); // 💸 Track expected income (Salary + Other Income)
+  const [expectedIncome, setExpectedIncome] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 📥 Form tracking bindings
   const [description, setDescription] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [category, setCategory] = useState<string>("");
@@ -69,50 +66,27 @@ export default function Expenses() {
     new Date().toISOString().split("T")[0],
   );
 
-  // 🔄 Fetch all data metrics from backend on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        interface RawExpenseItem {
-          id: number | string;
-          description: string;
-          amount: number;
-          category: string;
-          expenseDate: string;
-        }
+        const rawData: Expense[] = await financeApi.getExpenses();
+        const parsedExpenses: ExpenseItem[] = (rawData || []).map((item) => ({
+          id: String(item?.id ?? crypto.randomUUID()),
+          description: item?.description ?? "Unspecified Transaction",
+          amount: Number(item?.amount ?? 0),
+          category: item?.category ?? "Miscellaneous",
+          expenseDate: item?.expenseDate ?? new Date().toISOString(),
+        }));
+        setExpenseList(parsedExpenses);
 
-        // 🛡️ Double assertion isolation pattern to securely request mixed operational endpoints
-        const secureApi = financeApi as unknown as {
-          getExpenses?: () => Promise<RawExpenseItem[]>;
-          getBudgetPlan?: () => Promise<MonthlyBudget>;
-        };
+        const budgetData: MonthlyBudget = await financeApi.getBudgetPlan();
+        const calculatedIncome =
+          Number(budgetData?.salary ?? 0) +
+          Number(budgetData?.otherIncome ?? 0);
 
-        // 1. Fetch Expenses Log
-        if (secureApi.getExpenses) {
-          const rawData: RawExpenseItem[] = await secureApi.getExpenses();
-          const parsedExpenses: ExpenseItem[] = (rawData || []).map(
-            (item: RawExpenseItem) => ({
-              id: String(item?.id ?? crypto.randomUUID()),
-              description: item?.description ?? "Unspecified Transaction",
-              amount: Number(item?.amount ?? 0),
-              category: item?.category ?? "Miscellaneous",
-              expenseDate: item?.expenseDate ?? new Date().toISOString(),
-            }),
-          );
-          setExpenseList(parsedExpenses);
-        }
-
-        // 2. Fetch Budget Plan (Expected Income: Salary + Other Income)
-        if (secureApi.getBudgetPlan) {
-          const budgetData = await secureApi.getBudgetPlan();
-          const calculatedIncome =
-            Number(budgetData?.salary ?? 0) +
-            Number(budgetData?.otherIncome ?? 0);
-
-          setExpectedIncome(calculatedIncome);
-        }
+        setExpectedIncome(calculatedIncome);
       } catch (err) {
         console.error("Failed to read synchronized system records:", err);
         setErrorMessage(
@@ -126,7 +100,6 @@ export default function Expenses() {
     fetchData();
   }, []);
 
-  // 💸 Async operational hook to push data entries down to MySQL database
   const handleAddExpense = async (
     e: React.FormEvent<HTMLFormElement>,
   ): Promise<void> => {
@@ -134,7 +107,7 @@ export default function Expenses() {
     if (!description || !amount || !category || !inputDate) return;
 
     setErrorMessage(null);
-    const newPayload = {
+    const newPayload: Expense = {
       description,
       amount: parseFloat(amount),
       category,
@@ -142,27 +115,17 @@ export default function Expenses() {
     };
 
     try {
-      const secureApi = financeApi as unknown as {
-        addExpense?: (data: typeof newPayload) => Promise<ExpenseItem>;
-      };
+      const response = await financeApi.addExpense(newPayload);
+      const savedExpense = response as unknown as ExpenseItem;
 
-      if (secureApi.addExpense) {
-        const savedItem = await secureApi.addExpense(newPayload);
-        const sanitizedItem: ExpenseItem = {
-          id: String(savedItem?.id ?? crypto.randomUUID()),
-          description: savedItem?.description ?? newPayload.description,
-          amount: Number(savedItem?.amount ?? newPayload.amount),
-          category: savedItem?.category ?? newPayload.category,
-          expenseDate: savedItem?.expenseDate ?? newPayload.expenseDate,
-        };
-        setExpenseList((prevExpenses) => [sanitizedItem, ...prevExpenses]);
-      } else {
-        const localMock: ExpenseItem = {
-          id: crypto.randomUUID(),
-          ...newPayload,
-        };
-        setExpenseList((prevExpenses) => [localMock, ...prevExpenses]);
-      }
+      const sanitizedItem: ExpenseItem = {
+        id: String(savedExpense?.id ?? crypto.randomUUID()),
+        description: savedExpense?.description ?? newPayload.description,
+        amount: Number(savedExpense?.amount ?? newPayload.amount),
+        category: savedExpense?.category ?? newPayload.category,
+        expenseDate: savedExpense?.expenseDate ?? newPayload.expenseDate,
+      };
+      setExpenseList((prevExpenses) => [sanitizedItem, ...prevExpenses]);
 
       setDescription("");
       setAmount("");
@@ -175,18 +138,10 @@ export default function Expenses() {
     }
   };
 
-  // 🗑️ Async deletion handler synchronizing localized array reductions
   const handleDeleteExpense = async (id: string): Promise<void> => {
     setErrorMessage(null);
     try {
-      const secureApi = financeApi as unknown as {
-        deleteExpense?: (id: string) => Promise<void>;
-      };
-
-      if (secureApi.deleteExpense) {
-        await secureApi.deleteExpense(id);
-      }
-
+      await financeApi.deleteExpense(Number(id));
       setExpenseList((prevExpenses) =>
         prevExpenses.filter((item) => item.id !== id),
       );
@@ -198,7 +153,6 @@ export default function Expenses() {
     }
   };
 
-  // 📊 Math Engine: Deduct active costs directly from Expected Income
   const totalSpent = expenseList.reduce(
     (acc, curr) => acc + Number(curr?.amount ?? 0),
     0,
@@ -207,7 +161,6 @@ export default function Expenses() {
 
   return (
     <Box sx={{ padding: 2 }}>
-      {/* Header Banner Section */}
       <Box sx={{ paddingBlock: 2, width: "100%" }}>
         <Typography
           variant="h1"
@@ -234,7 +187,6 @@ export default function Expenses() {
       )}
 
       <Grid container spacing={3} sx={{ mt: 1 }}>
-        {/* 📥 Input Form Panel Component */}
         <Grid item xs={12} md={4}>
           <Card sx={{ backgroundColor: colors.primary[400], boxShadow: 4 }}>
             <CardContent>
@@ -315,7 +267,6 @@ export default function Expenses() {
             </CardContent>
           </Card>
 
-          {/* Aggregated Total Analytics Panel */}
           <Card
             sx={{ backgroundColor: colors.primary[400], boxShadow: 4, mt: 3 }}
           >
@@ -332,7 +283,6 @@ export default function Expenses() {
             </CardContent>
           </Card>
 
-          {/* 🌟 Remaining Adjusted Surplus Balance Card (Expected Income - Expenses) */}
           <Card
             sx={{ backgroundColor: colors.primary[400], boxShadow: 4, mt: 3 }}
           >
@@ -364,7 +314,6 @@ export default function Expenses() {
           </Card>
         </Grid>
 
-        {/* 📊 Transaction History Output Ledger */}
         <Grid item xs={12} md={8}>
           <TableContainer
             component={Paper}
