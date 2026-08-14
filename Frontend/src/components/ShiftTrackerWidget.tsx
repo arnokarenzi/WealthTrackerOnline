@@ -103,6 +103,10 @@ export default function ShiftTrackerWidget() {
     100,
   );
 
+  // NEW: Calculate translated letters progress against the 750 target
+  const translatedLetters = monthlyBudget.translatedLetters || 0;
+  const lettersProgressPct = Math.min((translatedLetters / 750) * 100, 100);
+
   return (
     <Card
       sx={{
@@ -280,7 +284,7 @@ export default function ShiftTrackerWidget() {
 
         <Divider sx={{ my: 2 }} />
 
-        {/* NEW ACTION AREA: Log Translated Letters Textbox */}
+        {/* ACTION AREA: Log Translated Letters Textbox */}
         <Box
           component="form"
           onSubmit={handleLogProgress}
@@ -329,22 +333,51 @@ export default function ShiftTrackerWidget() {
           </Box>
         </Box>
 
-        {/* Time-Based Pacing Gauge */}
+        {/* PROGRESS BARS SECTION */}
         <Box>
-          <Box display="flex" justifyContent="space-between" mb={1}>
-            <Typography variant="body2" fontWeight="600" color="text.secondary">
-              Shift Timeline Progress
-            </Typography>
-            <Typography variant="body2" fontWeight="700" color="text.primary">
-              {shiftProgressPct}%
-            </Typography>
+          {/* Time-Based Pacing Gauge */}
+          <Box mb={2}>
+            <Box display="flex" justifyContent="space-between" mb={1}>
+              <Typography
+                variant="body2"
+                fontWeight="600"
+                color="text.secondary"
+              >
+                Shift Timeline Progress
+              </Typography>
+              <Typography variant="body2" fontWeight="700" color="text.primary">
+                {shiftProgressPct}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={shiftProgressPct}
+              color="primary"
+              sx={{ height: 8, borderRadius: 4 }}
+            />
           </Box>
-          <LinearProgress
-            variant="determinate"
-            value={shiftProgressPct}
-            color="primary"
-            sx={{ height: 8, borderRadius: 4 }}
-          />
+
+          {/* NEW: Letters Translation Progress Gauge */}
+          <Box>
+            <Box display="flex" justifyContent="space-between" mb={1}>
+              <Typography
+                variant="body2"
+                fontWeight="600"
+                color="text.secondary"
+              >
+                Letters Translation Progress (Target: 750)
+              </Typography>
+              <Typography variant="body2" fontWeight="700" color="text.primary">
+                {lettersProgressPct.toFixed(1)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={lettersProgressPct}
+              color="success"
+              sx={{ height: 8, borderRadius: 4 }}
+            />
+          </Box>
         </Box>
       </CardContent>
     </Card>
