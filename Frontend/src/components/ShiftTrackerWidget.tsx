@@ -98,8 +98,10 @@ export default function ShiftTrackerWidget() {
   const { shiftStatus, monthlyBudget } = data;
   const muiColor =
     shiftStatus.variant === "danger" ? "error" : shiftStatus.variant;
+
+  // FIX: Using shiftDay instead of currentDay for the correct timeline percentage
   const shiftProgressPct = Math.min(
-    Math.round((shiftStatus.currentDay / shiftStatus.totalDaysInShift) * 100),
+    Math.round((shiftStatus.shiftDay / shiftStatus.totalDaysInShift) * 100),
     100,
   );
 
