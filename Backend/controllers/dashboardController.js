@@ -42,14 +42,10 @@ export const getDashboard = async (req, res) => {
     const actualPrincipalInvested = n(investmentRows[0].totalPrincipal);
     const currentInvestmentValue = n(investmentRows[0].totalValue);
 
-    // Expected Income (Budget target, NOT cash in hand yet)
     const liveSalary = n(b.translatedLetters) * RATE_PER_LETTER;
     const liveIncome = liveSalary + n(b.otherIncome);
-
-    // Read actual liquid wallet balance from database (updated via reset rollover & expenses)
     const liveBalance = n(b.balance);
 
-    // Update expected salary in DB, leaving wallet balance untouched
     await pool.query("UPDATE MonthlyBudget SET salary = ? WHERE id = 1", [
       liveSalary,
     ]);
@@ -78,11 +74,19 @@ export const getDashboard = async (req, res) => {
     const shiftLetters = n(b.shiftLetters);
     const remainingToMax = MAX_SHIFT_LETTERS - shiftLetters;
 
+    // --- NEW GRANULAR TIME MATH FOR MEDALS ---
+    const completedDays = Math.max(0, shiftDay - 1);
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const fractionOfToday = (currentHour + currentMinute / 60) / 24; 
+    const preciseDaysElapsed = completedDays + fractionOfToday;
+
     const dailyMax = MAX_SHIFT_LETTERS / totalDaysInShift;
     const dailyMin = 675 / totalDaysInShift;
 
-    const maxPace = shiftDay * dailyMax;
-    const minPace = shiftDay * dailyMin;
+    // Use precise fraction instead of whole integer to calculate pace targets
+    const maxPace = preciseDaysElapsed * dailyMax;
+    const minPace = preciseDaysElapsed * dailyMin;
 
     const remainingDaysInShift = Math.max(1, totalDaysInShift - shiftDay + 1);
     const chunkPacingTarget = Math.round(remainingToMax / remainingDaysInShift);
@@ -93,7 +97,7 @@ export const getDashboard = async (req, res) => {
       variant: "light",
       behind: 0,
       isLastDay: day === 15 || day === lastDayOfMonth,
-      shiftDay,
+      shiftDay, // Kept as whole number so frontend still reads "Day 10 of 16"
       totalDaysInShift,
       isShift1,
       currentDay: day,
