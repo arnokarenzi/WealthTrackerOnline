@@ -30,6 +30,9 @@ export default function ShiftTrackerWidget() {
   // New interactive states for the text box
   const [inputLetters, setInputLetters] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
+  
+  // NEW: State to track live current time for granular hourly progress
+  const [now, setNow] = useState<Date>(new Date());
 
   // Reusable function to fetch live dashboard metrics
   const fetchMetrics = () => {
@@ -47,6 +50,14 @@ export default function ShiftTrackerWidget() {
 
   useEffect(() => {
     fetchMetrics();
+    
+    // NEW: Automatically update the clock every 60 seconds to push the progress bar forward
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60000); 
+
+    // Cleanup the timer when component unmounts
+    return () => clearInterval(timer);
   }, []);
 
   // Handle submitting the text box data to Aiven MySQL
@@ -99,13 +110,20 @@ export default function ShiftTrackerWidget() {
   const muiColor =
     shiftStatus.variant === "danger" ? "error" : shiftStatus.variant;
 
-  // FIX: Using shiftDay instead of currentDay for the correct timeline percentage
-  const shiftProgressPct = Math.min(
-    Math.round((shiftStatus.shiftDay / shiftStatus.totalDaysInShift) * 100),
-    100,
-  );
+  // NEW: Hourly pacing calculation
+  const completedFullDays = Math.max(0, shiftStatus.shiftDay - 1);
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  // Calculate how much of today has passed (e.g., 12:00 PM = 0.5 days)
+  const fractionOfToday = (currentHour + currentMinute / 60) / 24; 
+  const preciseDaysElapsed = completedFullDays + fractionOfToday;
 
-  // NEW: Calculate translated letters progress against the 750 target
+  const rawShiftProgressPct = (preciseDaysElapsed / shiftStatus.totalDaysInShift) * 100;
+  // Use toFixed(1) so you can actually see the decimal move throughout the day
+  const shiftProgressPct = Math.min(Number(rawShiftProgressPct.toFixed(1)), 100); 
+
+  // Calculate translated letters progress against the 750 target
   const translatedLetters = monthlyBudget.translatedLetters || 0;
   const lettersProgressPct = Math.min((translatedLetters / 750) * 100, 100);
 
@@ -359,7 +377,7 @@ export default function ShiftTrackerWidget() {
             />
           </Box>
 
-          {/* NEW: Letters Translation Progress Gauge */}
+          {/* Letters Translation Progress Gauge */}
           <Box>
             <Box display="flex" justifyContent="space-between" mb={1}>
               <Typography
