@@ -1,3 +1,6 @@
+// Force the Vercel Node.js environment to use Kigali time
+process.env.TZ = 'Africa/Kigali';
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";

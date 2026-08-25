@@ -27,14 +27,11 @@ export default function ShiftTrackerWidget() {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // New interactive states for the text box
   const [inputLetters, setInputLetters] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
   
-  // NEW: State to track live current time for granular hourly progress
   const [now, setNow] = useState<Date>(new Date());
 
-  // Reusable function to fetch live dashboard metrics
   const fetchMetrics = () => {
     financeApi
       .getDashboardSummary()
@@ -51,16 +48,13 @@ export default function ShiftTrackerWidget() {
   useEffect(() => {
     fetchMetrics();
     
-    // NEW: Automatically update the clock every 60 seconds to push the progress bar forward
     const timer = setInterval(() => {
       setNow(new Date());
     }, 60000); 
 
-    // Cleanup the timer when component unmounts
     return () => clearInterval(timer);
   }, []);
 
-  // Handle submitting the text box data to Aiven MySQL
   const handleLogProgress = async (e: React.FormEvent) => {
     e.preventDefault();
     const count = parseInt(inputLetters, 10);
@@ -73,8 +67,8 @@ export default function ShiftTrackerWidget() {
     setSubmitting(true);
     try {
       await financeApi.recordTranslatedLetters(count);
-      setInputLetters(""); // Clear the text box on success
-      fetchMetrics(); // Refresh the numbers dynamically!
+      setInputLetters("");
+      fetchMetrics(); 
     } catch (err) {
       console.error("Failed to update translation progress:", err);
       alert("Error saving progress to the cloud database.");
@@ -110,21 +104,23 @@ export default function ShiftTrackerWidget() {
   const muiColor =
     shiftStatus.variant === "danger" ? "error" : shiftStatus.variant;
 
-  // NEW: Hourly pacing calculation
+  // Granular Time Math
   const completedFullDays = Math.max(0, shiftStatus.shiftDay - 1);
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   
-  // Calculate how much of today has passed (e.g., 12:00 PM = 0.5 days)
   const fractionOfToday = (currentHour + currentMinute / 60) / 24; 
   const preciseDaysElapsed = completedFullDays + fractionOfToday;
 
   const rawShiftProgressPct = (preciseDaysElapsed / shiftStatus.totalDaysInShift) * 100;
-  // Use toFixed(1) so you can actually see the decimal move throughout the day
   const shiftProgressPct = Math.min(Number(rawShiftProgressPct.toFixed(1)), 100); 
 
-  // Calculate translated letters progress against the 750 target
+  // NEW: Live Pacing Math (Overriding Backend Variables)
   const translatedLetters = monthlyBudget.translatedLetters || 0;
+  const dailyQuota = 750 / shiftStatus.totalDaysInShift;
+  const livePacingTarget = Math.round(dailyQuota * preciseDaysElapsed);
+  const liveShortfall = Math.max(0, livePacingTarget - translatedLetters);
+  
   const lettersProgressPct = Math.min((translatedLetters / 750) * 100, 100);
 
   return (
@@ -136,7 +132,6 @@ export default function ShiftTrackerWidget() {
       }}
     >
       <CardContent sx={{ p: 3 }}>
-        {/* Header Section */}
         <Box
           display="flex"
           justifyContent="space-between"
@@ -163,7 +158,6 @@ export default function ShiftTrackerWidget() {
           />
         </Box>
 
-        {/* Engine Notification Banner */}
         <Box
           sx={{
             bgcolor: `${muiColor}.main`,
@@ -178,7 +172,6 @@ export default function ShiftTrackerWidget() {
           </Typography>
         </Box>
 
-        {/* Metrics Grid */}
         <Grid container spacing={3} mb={3}>
           <Grid item xs={12} sm={6} md={3}>
             <Box display="flex" alignItems="center" gap={1.5}>
@@ -200,9 +193,9 @@ export default function ShiftTrackerWidget() {
                 >
                   Letters Velocity
                 </Typography>
+                {/* Replaced shiftStatus.chunkPacingTarget with livePacingTarget */}
                 <Typography variant="h6" fontWeight="700">
-                  {monthlyBudget.translatedLetters} /{" "}
-                  {shiftStatus.chunkPacingTarget}
+                  {translatedLetters} / {livePacingTarget}
                 </Typography>
               </Box>
             </Box>
@@ -228,12 +221,13 @@ export default function ShiftTrackerWidget() {
                 >
                   Pacing Shortfall
                 </Typography>
+                {/* Replaced shiftStatus.behind with liveShortfall */}
                 <Typography
                   variant="h6"
                   fontWeight="700"
-                  color={shiftStatus.behind > 0 ? "error.main" : "text.primary"}
+                  color={liveShortfall > 0 ? "error.main" : "text.primary"}
                 >
-                  {shiftStatus.behind} Letters
+                  {liveShortfall} Letters
                 </Typography>
               </Box>
             </Box>
@@ -304,7 +298,6 @@ export default function ShiftTrackerWidget() {
 
         <Divider sx={{ my: 2 }} />
 
-        {/* ACTION AREA: Log Translated Letters Textbox */}
         <Box
           component="form"
           onSubmit={handleLogProgress}
@@ -353,9 +346,7 @@ export default function ShiftTrackerWidget() {
           </Box>
         </Box>
 
-        {/* PROGRESS BARS SECTION */}
         <Box>
-          {/* Time-Based Pacing Gauge */}
           <Box mb={2}>
             <Box display="flex" justifyContent="space-between" mb={1}>
               <Typography
@@ -377,7 +368,6 @@ export default function ShiftTrackerWidget() {
             />
           </Box>
 
-          {/* Letters Translation Progress Gauge */}
           <Box>
             <Box display="flex" justifyContent="space-between" mb={1}>
               <Typography
