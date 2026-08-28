@@ -97,7 +97,7 @@ export const getDashboard = async (req, res) => {
       variant: "light",
       behind: 0,
       isLastDay: day === 15 || day === lastDayOfMonth,
-      shiftDay, // Kept as whole number so frontend still reads "Day 10 of 16"
+      shiftDay, 
       totalDaysInShift,
       isShift1,
       currentDay: day,
@@ -125,14 +125,17 @@ export const getDashboard = async (req, res) => {
       shiftStatus.variant = "danger";
     }
 
+    // --- NEW PROJECTED PAY MATH (Never falls below actual typed amount) ---
     let projectedPay = 0;
-    if (shiftStatus.medal.includes("Gold"))
+    if (shiftStatus.medal.includes("Gold")) {
       projectedPay = MAX_SHIFT_LETTERS * RATE_PER_LETTER;
-    else if (shiftStatus.medal.includes("Silver"))
-      projectedPay = 600 * RATE_PER_LETTER;
-    else if (shiftStatus.medal.includes("Bronze"))
-      projectedPay = 450 * RATE_PER_LETTER;
-    else projectedPay = shiftLetters * RATE_PER_LETTER;
+    } else if (shiftStatus.medal.includes("Silver")) {
+      projectedPay = Math.max(shiftLetters, 650) * RATE_PER_LETTER;
+    } else if (shiftStatus.medal.includes("Bronze")) {
+      projectedPay = Math.max(shiftLetters, 550) * RATE_PER_LETTER;
+    } else {
+      projectedPay = shiftLetters * RATE_PER_LETTER;
+    }
 
     shiftStatus.projectedPay = projectedPay;
     shiftStatus.potentialLoss =
@@ -202,7 +205,6 @@ export const updateLetters = async (req, res) => {
 
     const newSalary = currentTotal * RATE_PER_LETTER;
 
-    // Updates expected salary target, leaving balance untouched
     await pool.query(
       "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ? WHERE id = 1",
       [currentTotal, currentShift, newSalary],
@@ -264,7 +266,6 @@ export const updateMonthlyBudget = async (req, res) => {
       }
     }
 
-    // Budget updates are placeholders; preserve current wallet balance
     const sql = `UPDATE MonthlyBudget SET 
       salary=?, otherIncome=?, rent=?, schoolSaving=?, phoneInternet=?, electricityWater=?, 
       food=?, miscellaneous=?, medical=?, familySupport=?, emergencyFund=?, investment=?

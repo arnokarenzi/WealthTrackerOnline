@@ -32,7 +32,7 @@ import {
 import PersonalFinancesCard from "./components/PersonalFinanceCard";
 import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
-import PendingEarningsWidget from "../../components/PendingEarningsWidget"; // 🌟 Imported Pending Earnings Widget
+import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
@@ -85,7 +85,6 @@ export default function Overview() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState<boolean>(false);
 
-  // 🌟 Extra Income Modal States
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState<boolean>(false);
   const [incomeAmount, setIncomeAmount] = useState<string>("");
   const [incomeDescription, setIncomeDescription] = useState<string>("");
@@ -103,7 +102,6 @@ export default function Overview() {
         getExpenses?: () => Promise<DailyExpense[]>;
       };
 
-      // Wrapped individual calls with catch blocks so a single table error doesn't break the entire dashboard
       const [budgetPlan, dashboardSummary, savingsData, expensesData] =
         await Promise.all([
           secureApi.getBudgetPlan().catch(() => null),
@@ -147,12 +145,9 @@ export default function Overview() {
 
     try {
       setIsResetting(true);
-
       await financeApi.initializeProjectDefaults();
-
       await fetchDashboardData();
       setRefreshKey((prev: number) => prev + 1);
-
       setIsResetting(false);
       setIsResetModalOpen(false);
       setPasswordInput("");
@@ -173,7 +168,6 @@ export default function Overview() {
     if (!isResetting) setIsResetModalOpen(false);
   };
 
-  // 🌟 Extra Income Handlers
   const handleOpenIncomeModal = (): void => {
     setIsIncomeModalOpen(true);
     setIncomeAmount("");
@@ -214,7 +208,6 @@ export default function Overview() {
     }
   };
 
-  // Calculations for Cards
   const salary = Number(liveBudget?.salary ?? 0);
   const auxiliary = Number(liveBudget?.otherIncome ?? 0);
   const totalIncome = dashboardData?.monthlyBudget
@@ -222,7 +215,6 @@ export default function Overview() {
       Number(dashboardData.monthlyBudget.otherIncome)
     : salary + auxiliary;
 
-  // Total accumulated reserves calculated dynamically from actual Savings Goals records
   const accumulatedReserves = savings.reduce((total, goal) => {
     const current = Number(
       goal.currentAmount ?? goal.current_amount ?? goal.currentSaved ?? 0,
@@ -230,7 +222,6 @@ export default function Overview() {
     return total + current;
   }, 0);
 
-  // Extract true Investments value exclusively from the "Business Capital" savings goal
   const businessCapitalGoal = savings.find(
     (g) =>
       (g.goalName ?? g.goal_name ?? "").toLowerCase() === "business capital",
@@ -242,7 +233,6 @@ export default function Overview() {
       0,
   );
 
-  // Pull wallet balance directly from the backend's authoritative balance source
   const calculatedWallet = Number(
     dashboardData?.monthlyBudget?.balance ?? liveBudget?.balance ?? 0,
   );
@@ -311,10 +301,13 @@ export default function Overview() {
         </Box>
 
         <Box sx={{ width: "100%", mb: 2 }}>
-          <ShiftTrackerWidget key={refreshKey} />
+          <ShiftTrackerWidget 
+            key={refreshKey} 
+            onProgressUpdate={fetchDashboardData} 
+            leakageThreshold={30000} 
+          />
         </Box>
 
-        {/* 🌟 Render Pending Earnings Widget (automatically hides if empty) */}
         <Box sx={{ width: "100%", mb: 2 }}>
           <PendingEarningsWidget
             key={refreshKey}
@@ -509,7 +502,6 @@ export default function Overview() {
         </Grid>
       </Box>
 
-      {/* Side Income Modal Dialog */}
       <Dialog
         open={isIncomeModalOpen}
         onClose={handleCloseIncomeModal}
@@ -574,7 +566,6 @@ export default function Overview() {
         </DialogActions>
       </Dialog>
 
-      {/* Administrative Master Reset Modal Dialog */}
       <Dialog
         open={isResetModalOpen}
         onClose={handleCloseResetModal}

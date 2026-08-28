@@ -12,6 +12,10 @@ import {
   TextField,
   Button,
   InputAdornment,
+  Alert,
+  AlertTitle,
+  Collapse,
+  IconButton,
 } from "@mui/material";
 import {
   LocalActivity,
@@ -19,18 +23,28 @@ import {
   TrendingDown,
   AccountBalanceWallet,
   Send,
+  WarningAmber,
+  Close,
 } from "@mui/icons-material";
 import { financeApi } from "../services/api";
 import { DashboardSummary } from "../types/api";
 
-export default function ShiftTrackerWidget() {
+interface ShiftTrackerProps {
+  onProgressUpdate?: () => void;
+  leakageThreshold?: number;
+}
+
+export default function ShiftTrackerWidget({
+  onProgressUpdate,
+  leakageThreshold = 30000,
+}: ShiftTrackerProps) {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [inputLetters, setInputLetters] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
-  
   const [now, setNow] = useState<Date>(new Date());
+  const [alertDismissed, setAlertDismissed] = useState<boolean>(false);
 
   const fetchMetrics = () => {
     financeApi
@@ -47,10 +61,10 @@ export default function ShiftTrackerWidget() {
 
   useEffect(() => {
     fetchMetrics();
-    
+
     const timer = setInterval(() => {
       setNow(new Date());
-    }, 60000); 
+    }, 60000);
 
     return () => clearInterval(timer);
   }, []);
@@ -68,7 +82,9 @@ export default function ShiftTrackerWidget() {
     try {
       await financeApi.recordTranslatedLetters(count);
       setInputLetters("");
-      fetchMetrics(); 
+      setAlertDismissed(false);
+      fetchMetrics();
+      if (onProgressUpdate) onProgressUpdate();
     } catch (err) {
       console.error("Failed to update translation progress:", err);
       alert("Error saving progress to the cloud database.");
@@ -104,24 +120,42 @@ export default function ShiftTrackerWidget() {
   const muiColor =
     shiftStatus.variant === "danger" ? "error" : shiftStatus.variant;
 
-  // Granular Time Math
   const completedFullDays = Math.max(0, shiftStatus.shiftDay - 1);
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
-  
-  const fractionOfToday = (currentHour + currentMinute / 60) / 24; 
+  const fractionOfToday = (currentHour + currentMinute / 60) / 24;
   const preciseDaysElapsed = completedFullDays + fractionOfToday;
 
-  const rawShiftProgressPct = (preciseDaysElapsed / shiftStatus.totalDaysInShift) * 100;
-  const shiftProgressPct = Math.min(Number(rawShiftProgressPct.toFixed(1)), 100); 
+  const rawShiftProgressPct =
+    (preciseDaysElapsed / shiftStatus.totalDaysInShift) * 100;
+  const shiftProgressPct = Math.min(
+    Number(rawShiftProgressPct.toFixed(1)),
+    100
+  );
 
-  // NEW: Live Pacing Math (Overriding Backend Variables)
   const translatedLetters = monthlyBudget.translatedLetters || 0;
   const dailyQuota = 750 / shiftStatus.totalDaysInShift;
   const livePacingTarget = Math.round(dailyQuota * preciseDaysElapsed);
   const liveShortfall = Math.max(0, livePacingTarget - translatedLetters);
-  
   const lettersProgressPct = Math.min((translatedLetters / 750) * 100, 100);
+
+  const potentialLoss = shiftStatus.potentialLoss || 0;
+  const isLeaking = potentialLoss > leakageThreshold;
+
+  const remainingDaysInShift = Math.max(
+    1,
+    shiftStatus.totalDaysInShift - shiftStatus.shiftDay + 1
+  );
+  const targetLettersForSafety = Math.ceil(
+    (750 * 245 - leakageThreshold) / 245
+  );
+  const lettersNeededToSafety = Math.max(
+    0,
+    targetLettersForSafety - translatedLetters
+  );
+  const recoveryPacePerDay = Math.ceil(
+    lettersNeededToSafety / remainingDaysInShift
+  );
 
   return (
     <Card
@@ -132,6 +166,40 @@ export default function ShiftTrackerWidget() {
       }}
     >
       <CardContent sx={{ p: 3 }}>
+        <Collapse in={isLeaking && !alertDismissed}>
+          <Alert
+            severity="error"
+            icon={<WarningAmber fontSize="inherit" />}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setAlertDismissed(true)}
+              >
+                <Close fontSize="inherit" />
+              </IconButton>
+            }
+            sx={{
+              mb: 3,
+              borderRadius: 2,
+              boxShadow: "0px 2px 10px rgba(211, 47, 47, 0.2)",
+              backgroundColor: "error.dark",
+              color: "common.white",
+              "& .MuiAlert-icon": { color: "common.white" },
+            }}
+          >
+            <AlertTitle sx={{ fontWeight: 800, fontSize: "1rem" }}>
+              ⚠️ Financial Leakage Warning (Threshold: {leakageThreshold.toLocaleString()} RWF)
+            </AlertTitle>
+            Your current pace projects a loss of{" "}
+            <strong>{Math.round(potentialLoss).toLocaleString()} RWF</strong> for
+            this shift. You must translate an average of{" "}
+            <strong>{recoveryPacePerDay} letters per day</strong> over the next{" "}
+            {remainingDaysInShift} days to stay under your maximum loss threshold.
+          </Alert>
+        </Collapse>
+
         <Box
           display="flex"
           justifyContent="space-between"
@@ -193,7 +261,6 @@ export default function ShiftTrackerWidget() {
                 >
                   Letters Velocity
                 </Typography>
-                {/* Replaced shiftStatus.chunkPacingTarget with livePacingTarget */}
                 <Typography variant="h6" fontWeight="700">
                   {translatedLetters} / {livePacingTarget}
                 </Typography>
@@ -221,7 +288,6 @@ export default function ShiftTrackerWidget() {
                 >
                   Pacing Shortfall
                 </Typography>
-                {/* Replaced shiftStatus.behind with liveShortfall */}
                 <Typography
                   variant="h6"
                   fontWeight="700"
@@ -267,7 +333,7 @@ export default function ShiftTrackerWidget() {
                   p: 1.5,
                   bgcolor: "action.hover",
                   borderRadius: 2,
-                  color: "warning.main",
+                  color: isLeaking ? "error.main" : "warning.main",
                 }}
               >
                 <TrendingDown />
