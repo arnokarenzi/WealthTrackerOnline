@@ -82,7 +82,7 @@ export const getDashboard = async (req, res) => {
     const preciseDaysElapsed = completedDays + fractionOfToday;
 
     const dailyMax = MAX_SHIFT_LETTERS / totalDaysInShift;
-    const dailyMin = 675 / totalDaysInShift;
+    const dailyMin = (MAX_SHIFT_LETTERS * 0.9) / totalDaysInShift;
 
     // Use precise fraction instead of whole integer to calculate pace targets
     const maxPace = preciseDaysElapsed * dailyMax;
@@ -113,13 +113,13 @@ export const getDashboard = async (req, res) => {
       shiftStatus.medal = "🥈 Silver";
       shiftStatus.message = `Optimal Pace. You need ${toGold} more letters to hit the Gold track!`;
       shiftStatus.variant = "secondary";
-    } else if (shiftLetters >= minPace * 0.875) {
+    } else if (shiftLetters >= maxPace * 0.8) {
       const toSilver = Math.ceil(minPace - shiftLetters);
       shiftStatus.medal = "🥉 Bronze";
       shiftStatus.message = `Slightly behind pace. Add ${toSilver} more letters to reach Silver territory.`;
       shiftStatus.variant = "success";
     } else {
-      shiftStatus.behind = Math.round(minPace - shiftLetters);
+      shiftStatus.behind = Math.round((maxPace * 0.8) - shiftLetters);
       shiftStatus.medal = "⚠️ Danger";
       shiftStatus.message = `DANGER: You are ${shiftStatus.behind} letters behind the safety guard!`;
       shiftStatus.variant = "danger";
@@ -130,9 +130,9 @@ export const getDashboard = async (req, res) => {
     if (shiftStatus.medal.includes("Gold")) {
       projectedPay = MAX_SHIFT_LETTERS * RATE_PER_LETTER;
     } else if (shiftStatus.medal.includes("Silver")) {
-      projectedPay = Math.max(shiftLetters, 650) * RATE_PER_LETTER;
+      projectedPay = Math.max(shiftLetters, (MAX_SHIFT_LETTERS * 0.9)) * RATE_PER_LETTER;
     } else if (shiftStatus.medal.includes("Bronze")) {
-      projectedPay = Math.max(shiftLetters, 550) * RATE_PER_LETTER;
+      projectedPay = Math.max(shiftLetters, (MAX_SHIFT_LETTERS * 0.8)) * RATE_PER_LETTER;
     } else {
       projectedPay = shiftLetters * RATE_PER_LETTER;
     }
@@ -218,6 +218,26 @@ export const updateLetters = async (req, res) => {
 
 export const resetShift = async (req, res) => {
   try {
+    // 1. Fetch completed shift letters before reset
+    const [rows] = await pool.query(
+      "SELECT shiftLetters FROM MonthlyBudget WHERE id = 1"
+    );
+    
+    if (rows.length > 0) {
+      const currentShiftLetters = n(rows[0].shiftLetters);
+      const earnedAmount = currentShiftLetters * RATE_PER_LETTER;
+
+      // 2. Insert into PendingEarnings matching actual schema columns
+      if (earnedAmount > 0) {
+        await pool.query(
+          `INSERT INTO PendingEarnings (amount, description, is_collected, earned_date) 
+           VALUES (?, ?, 0, NOW())`,
+          [earnedAmount, `Shift Salary (${currentShiftLetters} letters)`]
+        );
+      }
+    }
+
+    // 3. Reset shift metrics for the next shift
     await pool.query(`
       UPDATE MonthlyBudget 
       SET shiftLetters = 0, 
@@ -226,12 +246,13 @@ export const resetShift = async (req, res) => {
       WHERE id = 1
     `);
 
-    res.json({ message: "Shift reset successful!" });
+    res.json({ message: "Shift reset successful! Earnings moved to Pending Buffer." });
   } catch (err) {
     console.error("Reset Shift Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 
 export const updateMonthlyBudget = async (req, res) => {
   const { id } = req.params;
