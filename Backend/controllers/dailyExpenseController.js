@@ -212,7 +212,7 @@ export const deleteExpense = async (req, res) => {
       if (existing.length > 0) {
         await connection.query(
           "UPDATE SchoolFees SET amountSaved = GREATEST(0, COALESCE(amountSaved, 0) - ?), cumulative = GREATEST(0, COALESCE(cumulative, 0) - ?) WHERE id = ?",
-          [expenseAmount, existing[0].id]
+          [expenseAmount, expenseAmount, existing[0].id]
         );
       }
     } else if (catLower.includes("invest")) {
