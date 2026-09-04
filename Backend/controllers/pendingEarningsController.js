@@ -49,6 +49,12 @@ export const claimPendingEarning = async (req, res) => {
       [id],
     );
 
+    // 4. Record entry in WalletIncome audit table
+    await connection.query(
+      "INSERT INTO WalletIncome (amount, description, source_type) VALUES (?, ?, 'shift_rollover')",
+      [payoutAmount, earning.description]
+    );
+
     await connection.commit();
     connection.release();
 

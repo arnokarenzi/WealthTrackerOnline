@@ -14,7 +14,7 @@ import gratitudeRoutes from "./routes/gratitudeRoutes.js";
 import alertsRoutes from "./routes/alertsRoutes.js";
 import emergencyRoutes from "./routes/emergencyRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
-import pendingEarningsRouter from "./routes/pendingEarningsRoutes.js"; // 🌟 Added missing import
+import pendingEarningsRouter from "./routes/pendingEarningsRoutes.js";
 
 dotenv.config();
 

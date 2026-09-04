@@ -10,6 +10,14 @@ import {
   PendingEarningItem,
 } from "../types/api";
 
+export interface WalletIncomeItem {
+  id: number;
+  amount: number;
+  description: string;
+  source_type: "shift_rollover" | "side_income";
+  created_at: string;
+}
+
 const DEV_API_URL = "http://localhost:5000/api";
 const PROD_API_URL = "https://wealthtrackeronline.onrender.com/api";
 
@@ -35,7 +43,7 @@ export const financeApi = {
   },
 
   updateLettersTranslated: async (
-    lettersCount: number,
+    lettersCount: number
   ): Promise<{ message: string }> => {
     const response = await apiClient.post("/monthly-budget/letters", {
       letters: lettersCount,
@@ -44,7 +52,7 @@ export const financeApi = {
   },
 
   recordTranslatedLetters: async (
-    newLetters: number | string,
+    newLetters: number | string
   ): Promise<void> => {
     await apiClient.post("/dashboard/letters", { newLetters });
   },
@@ -63,6 +71,15 @@ export const financeApi = {
     await apiClient.put("/monthly-budget", budget);
   },
 
+  getWalletIncomeHistory: async (startDate?: string, endDate?: string): Promise<WalletIncomeItem[]> => {
+    let url = "/monthly-budget/income-history";
+    if (startDate && endDate) {
+      url += `?startDate=${startDate}&endDate=${endDate}`;
+    }
+    const response = await apiClient.get<WalletIncomeItem[]>(url);
+    return response.data;
+  },
+
   initializeProjectDefaults: async (passphrase?: string): Promise<void> => {
     await apiClient.post("/monthly-budget/initialize", { passphrase });
   },
@@ -71,29 +88,29 @@ export const financeApi = {
     await apiClient.post("/reset-all-data");
   },
 
-  resetMonthAndExport: async (): Promise<void> => {
-    const response = await apiClient.post(
-      "/monthly-budget/reset",
-      {},
-      {
-        responseType: "blob",
-      },
-    );
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute(
-      "download",
-      `daily-expenses-${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  resetMonth: async (): Promise<{ message: string }> => {
+    const response = await apiClient.post("/monthly-budget/reset");
+    return response.data;
+  },
+
+  resetMonthAndExport: async (): Promise<{ message: string }> => {
+    const response = await apiClient.post("/monthly-budget/reset");
+    return response.data;
   },
 
   // --- EXPENSES ENDPOINTS ---
   getExpenses: async (): Promise<Expense[]> => {
     const response = await apiClient.get<Expense[]>("/daily-expenses");
+    return response.data;
+  },
+
+  getExpenseHistory: async (
+    startDate: string,
+    endDate: string
+  ): Promise<Expense[]> => {
+    const response = await apiClient.get<Expense[]>(
+      `/daily-expenses/history?startDate=${startDate}&endDate=${endDate}`
+    );
     return response.data;
   },
 
@@ -126,16 +143,16 @@ export const financeApi = {
   // --- INVESTMENTS & PORTFOLIOS ---
   getInvestments: async (
     month: number,
-    year: number,
+    year: number
   ): Promise<Investment[]> => {
     const response = await apiClient.get<Investment[]>(
-      `/investments?month=${month}&year=${year}`,
+      `/investments?month=${month}&year=${year}`
     );
     return response.data;
   },
 
   logInvestmentAsset: async (
-    investment: Investment,
+    investment: Investment
   ): Promise<{ message: string }> => {
     const response = await apiClient.post("/investments", investment);
     return response.data;
@@ -144,7 +161,7 @@ export const financeApi = {
   deleteInvestmentAsset: async (
     id: number,
     month: number,
-    year: number,
+    year: number
   ): Promise<void> => {
     await apiClient.delete(`/investments/${id}`, { data: { month, year } });
   },
@@ -160,7 +177,7 @@ export const financeApi = {
 
   getActualInvestments: async (): Promise<ActualInvestment[]> => {
     const response = await apiClient.get<ActualInvestment[]>(
-      "/actual-investments",
+      "/actual-investments"
     );
     return response.data;
   },
@@ -172,7 +189,7 @@ export const financeApi = {
 
   updateInvestmentValue: async (
     id: number,
-    currentValue: number,
+    currentValue: number
   ): Promise<void> => {
     await apiClient.put(`/actual-investments/${id}`, {
       current_value: currentValue,
@@ -200,7 +217,7 @@ export const financeApi = {
 
   updateSavingsGoal: async (
     id: number,
-    data: { amountToAdd: string },
+    data: { amountToAdd: string }
   ): Promise<{ message: string }> => {
     const response = await apiClient.put(`/savings-goals/${id}`, data);
     return response.data;

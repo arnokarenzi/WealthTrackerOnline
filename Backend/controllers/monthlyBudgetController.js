@@ -8,6 +8,11 @@ const n = (val) => {
 
 const v = (val) => Number(val) || 0;
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
 export const getBudget = async (req, res) => {
   if (req.query.action === "cron") {
     return res.status(200).send("ok");
@@ -26,25 +31,10 @@ export const getBudget = async (req, res) => {
 
 export const updateBudget = async (req, res) => {
   const {
-    salary,
-    rent,
-    schoolSaving,
-    phoneInternet,
-    electricityWater,
-    food,
-    miscellaneous,
-    medical,
-    familySupport,
-    emergencyFund,
-    investment,
-    balance,
-    month,
-    year,
-    translatedLetters,
-    recommendedEssentials,
-    recommendedEmergency,
-    recommendedInvest,
-    recommendedDiscretionary,
+    salary, rent, schoolSaving, phoneInternet, electricityWater, food,
+    miscellaneous, medical, familySupport, emergencyFund, investment,
+    balance, month, year, translatedLetters, recommendedEssentials,
+    recommendedEmergency, recommendedInvest, recommendedDiscretionary,
     shiftLetters,
   } = req.body;
 
@@ -59,26 +49,11 @@ export const updateBudget = async (req, res) => {
       WHERE id = 1
     `;
     await pool.query(sql, [
-      n(salary),
-      n(rent),
-      n(schoolSaving),
-      n(phoneInternet),
-      n(electricityWater),
-      n(food),
-      n(miscellaneous),
-      n(medical),
-      n(familySupport),
-      n(emergencyFund),
-      n(investment),
-      n(balance),
-      n(month),
-      n(year),
-      n(translatedLetters),
-      n(recommendedEssentials),
-      n(recommendedEmergency),
-      n(recommendedInvest),
-      n(recommendedDiscretionary),
-      n(shiftLetters),
+      n(salary), n(rent), n(schoolSaving), n(phoneInternet),
+      n(electricityWater), n(food), n(miscellaneous), n(medical), n(familySupport),
+      n(emergencyFund), n(investment), n(balance), n(month), n(year), n(translatedLetters),
+      n(recommendedEssentials), n(recommendedEmergency), n(recommendedInvest),
+      n(recommendedDiscretionary), n(shiftLetters),
     ]);
     res.json({ message: "Budget records saved successfully!" });
   } catch (err) {
@@ -87,27 +62,41 @@ export const updateBudget = async (req, res) => {
 };
 
 export const addExtraIncome = async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const { amount, description } = req.body;
     const numAmount = Number(amount);
+    const incomeDesc = description || "Side Hustle / Extra Income";
 
     if (isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ error: "Invalid amount provided." });
     }
 
-    await pool.query(
+    await connection.beginTransaction();
+
+    await connection.query(
       "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
       [numAmount],
     );
 
+    // Record incoming wallet ledger entry
+    await connection.query(
+      "INSERT INTO WalletIncome (amount, description, source_type) VALUES (?, ?, 'side_income')",
+      [numAmount, incomeDesc]
+    );
+
+    await connection.commit();
     res.status(200).json({
       message: "Extra income successfully added to wallet balance!",
       amount: numAmount,
-      description: description || "Side Hustle / Extra Income",
+      description: incomeDesc,
     });
   } catch (err) {
+    await connection.rollback();
     console.error("Add Extra Income Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
@@ -155,79 +144,82 @@ export const resetMonth = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Fetch current shift expenses for CSV backup
-    const [expenses] = await connection.query(
-      "SELECT * FROM DailyExpense ORDER BY expenseDate DESC",
-    );
-
-    // 2. Fetch current budget state
+    // 1. Fetch current budget state
     const [budgetRows] = await connection.query(
-      "SELECT * FROM MonthlyBudget WHERE id = 1",
+      "SELECT * FROM MonthlyBudget WHERE id = 1"
     );
 
     if (budgetRows.length > 0) {
       const b = budgetRows[0];
       const expectedSalary = v(b.salary);
 
-      // 🌟 STAGE SALARY TO PENDING EARNINGS:
-      // Earned shift salary moves to pending queue awaiting manual claim/collection.
+      const now = new Date();
+      const monthName = MONTH_NAMES[now.getMonth()];
+      const yearNum = now.getFullYear();
+      
+      // Dynamic description format: "Shift Payment: August 2026"
+      const shiftRolloverDesc = `Shift Payment: ${monthName} ${yearNum}`;
+
+      // Stage earned salary to pending earnings
       if (expectedSalary > 0) {
         await connection.query(
           `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
            VALUES (?, ?, NOW(), FALSE)`,
-          [expectedSalary, "Shift Salary Rollover"],
+          [expectedSalary, shiftRolloverDesc]
         );
       }
 
-      const currentRealMonth = new Date().getMonth() + 1;
-      const currentRealYear = new Date().getFullYear();
+      const currentRealMonth = now.getMonth() + 1;
+      const currentRealYear = now.getFullYear();
       const currentWalletBalance = v(b.balance);
 
-      // 3. Reset budget line items for the new shift cycle (preserving wallet balance)
+      // Reset active budget counters for the new shift cycle
       await connection.query(
         `UPDATE MonthlyBudget 
          SET 
-           month = ?, 
-           year = ?,
-           salary = 0,
-           schoolSaving = 0, 
-           emergencyFund = 0, 
-           investment = 0, 
-           balance = ?,
-           translatedLetters = 0, 
-           shiftLetters = 0
+           month = ?, year = ?, salary = 0, schoolSaving = 0, 
+           emergencyFund = 0, investment = 0, balance = ?,
+           translatedLetters = 0, shiftLetters = 0
          WHERE id = 1`,
-        [currentRealMonth, currentRealYear, currentWalletBalance],
+        [currentRealMonth, currentRealYear, currentWalletBalance]
       );
     }
 
-    // 4. Clear daily expenses log for the new cycle
-    await connection.query("DELETE FROM DailyExpense");
+    // 2. Archive active expenses instead of deleting them
+    await connection.query(
+      "UPDATE DailyExpense SET is_archived = 1 WHERE is_archived = 0"
+    );
+
     await connection.commit();
 
-    // 5. Generate and download CSV backup stream
-    const csvHeaders = "ID,Date,Description,Category,Amount,Notes\n";
-    const csvRows = expenses
-      .map((item) => {
-        const date = item.expenseDate
-          ? new Date(item.expenseDate).toISOString().split("T")[0]
-          : "";
-        return `"${item.id}","${date}","${item.description || ""}","${item.category || ""}","${item.amount || 0}","${item.notes || ""}"`;
-      })
-      .join("\n");
-
-    const csvContent = csvHeaders + csvRows;
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=daily-expenses-backup.csv",
-    );
-    return res.status(200).send(csvContent);
+    // 3. Return a clean JSON response (No auto CSV download stream)
+    return res.status(200).json({
+      message: "Shift reset successful! Expenses moved to archive.",
+    });
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });
   } finally {
     connection.release();
+  }
+};
+
+export const getWalletIncomeHistory = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let query = "SELECT * FROM WalletIncome";
+    let params = [];
+
+    if (startDate && endDate) {
+      query += " WHERE DATE(created_at) BETWEEN ? AND ?";
+      params = [startDate, endDate];
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    const [rows] = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
