@@ -83,7 +83,7 @@ export default function Investments() {
   const [assetInputValue, setAssetInputValue] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  // Reserve Deduction / Asset Deploy Modal States
+  // Investment Reserve Deduction / Asset Deploy Modal States
   const [isDeployModalOpen, setIsDeployModalOpen] = useState<boolean>(false);
   const [deployForm, setDeployForm] = useState({
     assetName: "",
@@ -91,6 +91,14 @@ export default function Investments() {
     amount: "",
   });
   const [deployError, setDeployError] = useState<string | null>(null);
+
+  // Emergency Reserve Deploy Modal States
+  const [isEmergencyDeployModalOpen, setIsEmergencyDeployModalOpen] = useState<boolean>(false);
+  const [emergencyDeployForm, setEmergencyDeployForm] = useState({
+    amount: "",
+    description: "Emergency cash deployment",
+  });
+  const [emergencyDeployError, setEmergencyDeployError] = useState<string | null>(null);
 
   const normalizeData = (data: unknown): RawReserveData => {
     if (Array.isArray(data)) {
@@ -240,7 +248,7 @@ export default function Investments() {
     }
   };
 
-  // Reserve Deduction Handlers
+  // Investment Reserve Deduction Handlers
   const handleOpenDeployModal = () => {
     setDeployForm({ assetName: "", assetType: "Bond", amount: "" });
     setDeployError(null);
@@ -291,6 +299,55 @@ export default function Investments() {
     }
   };
 
+  // Emergency Reserve Deploy Handlers
+  const handleOpenEmergencyDeployModal = () => {
+    setEmergencyDeployForm({ amount: "", description: "Emergency cash deployment" });
+    setEmergencyDeployError(null);
+    setIsEmergencyDeployModalOpen(true);
+  };
+
+  const handleCloseEmergencyDeployModal = () => {
+    setIsEmergencyDeployModalOpen(false);
+    setEmergencyDeployError(null);
+  };
+
+  const handleEmergencyDeploySubmit = async () => {
+    const amountNum = Number(emergencyDeployForm.amount);
+    const currentEmergencyBalance = reserves["Emergency"]?.current || 0;
+
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setEmergencyDeployError("Please enter a valid positive amount.");
+      return;
+    }
+
+    if (amountNum > currentEmergencyBalance) {
+      setEmergencyDeployError(
+        `Amount exceeds current emergency balance of ${currentEmergencyBalance.toLocaleString()} RWF.`
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setEmergencyDeployError(null);
+
+      await financeApi.deployEmergencyFund({
+        amount: amountNum,
+        description: emergencyDeployForm.description,
+      });
+
+      await gatherVaultData();
+      handleCloseEmergencyDeployModal();
+    } catch (err) {
+      console.error("Failed to deploy emergency funds:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to deploy funds.";
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setEmergencyDeployError(apiError || errorMessage || "Failed to deploy funds.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const fixedCategories = [
     { title: "Emergency" },
     { title: "School Fees" },
@@ -318,7 +375,7 @@ export default function Investments() {
           </Box>
         ) : (
           <Grid container spacing={2} sx={{ width: "100%" }}>
-            {/* 🛡️ Cash Reserves & Target Goals */}
+            {/* Cash Reserves & Target Goals */}
             <Grid item xs={12}>
               <Box
                 sx={{
@@ -354,6 +411,7 @@ export default function Investments() {
                     const percentageCalculation =
                       target > 0 ? (current / target) * 100 : 0;
                     const isInvestCard = cat.title === "Investments";
+                    const isEmergencyCard = cat.title === "Emergency";
 
                     return (
                       <Grid item xs={12} sm={6} md={4} key={cat.title}>
@@ -435,6 +493,29 @@ export default function Investments() {
                               Deduct & Deploy Cash
                             </Button>
                           )}
+
+                          {isEmergencyCard && (
+                            <Button
+                              variant="outlined"
+                              color="success"
+                              size="small"
+                              startIcon={<SwapHoriz />}
+                              onClick={handleOpenEmergencyDeployModal}
+                              sx={{
+                                mt: 2,
+                                textTransform: "none",
+                                fontWeight: 600,
+                                borderColor: colors.greenAccent[500],
+                                color: colors.greenAccent[400],
+                                "&:hover": {
+                                  borderColor: colors.greenAccent[400],
+                                  backgroundColor: "rgba(76, 206, 172, 0.08)",
+                                },
+                              }}
+                            >
+                              Deploy to Wallet
+                            </Button>
+                          )}
                         </Box>
                       </Grid>
                     );
@@ -443,7 +524,7 @@ export default function Investments() {
               </Box>
             </Grid>
 
-            {/* 📈 Active Growth Holdings */}
+            {/* Active Growth Holdings */}
             <Grid item xs={12}>
               <Box
                 sx={{
@@ -581,7 +662,7 @@ export default function Investments() {
         )}
       </Box>
 
-      {/* 📊 Modal for Editing Growth Asset Valuations */}
+      {/* Modal for Editing Growth Asset Valuations */}
       <Dialog
         open={isAssetModalOpen}
         onClose={handleCloseAssetEdit}
@@ -632,7 +713,7 @@ export default function Investments() {
         </DialogActions>
       </Dialog>
 
-      {/* 💸 Modal for Deducting from Investment Reserve & Creating Asset */}
+      {/* Modal for Deducting from Investment Reserve & Creating Asset */}
       <Dialog
         open={isDeployModalOpen}
         onClose={handleCloseDeployModal}
@@ -728,6 +809,94 @@ export default function Investments() {
             disabled={submitting || !deployForm.amount || !deployForm.assetName}
           >
             {submitting ? "Deducting..." : "Confirm Deduction"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal for Deploying Emergency Funds to Wallet */}
+      <Dialog
+        open={isEmergencyDeployModalOpen}
+        onClose={handleCloseEmergencyDeployModal}
+        PaperProps={{
+          sx: {
+            backgroundColor: colors.primary[400],
+            backgroundImage: "none",
+            minWidth: "340px",
+            maxWidth: "450px",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Deploy Emergency Funds to Wallet
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: colors.grey[300], mb: 2 }}>
+            Specify how much to deduct from your{" "}
+            <strong>Emergency Reserve</strong> (
+            {(reserves["Emergency"]?.current || 0).toLocaleString()} RWF
+            available) to return back to your wallet balance.
+          </Typography>
+
+          {emergencyDeployError && (
+            <Box
+              sx={{
+                p: 1.5,
+                mb: 2,
+                borderRadius: "4px",
+                backgroundColor: "rgba(244, 67, 54, 0.15)",
+                border: "1px solid #f44336",
+              }}
+            >
+              <Typography variant="caption" sx={{ color: "#f44336" }}>
+                {emergencyDeployError}
+              </Typography>
+            </Box>
+          )}
+
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              type="number"
+              label="Amount to Deploy (RWF)"
+              variant="outlined"
+              value={emergencyDeployForm.amount}
+              onChange={(e) =>
+                setEmergencyDeployForm({ ...emergencyDeployForm, amount: e.target.value })
+              }
+              disabled={submitting}
+              autoFocus
+              InputLabelProps={{ style: { color: colors.grey[200] } }}
+              inputProps={{ style: { color: "#ffffff" } }}
+            />
+            <TextField
+              fullWidth
+              label="Description / Reason"
+              variant="outlined"
+              value={emergencyDeployForm.description}
+              onChange={(e) =>
+                setEmergencyDeployForm({ ...emergencyDeployForm, description: e.target.value })
+              }
+              disabled={submitting}
+              InputLabelProps={{ style: { color: colors.grey[200] } }}
+              inputProps={{ style: { color: "#ffffff" } }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button
+            onClick={handleCloseEmergencyDeployModal}
+            disabled={submitting}
+            sx={{ color: colors.grey[200] }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleEmergencyDeploySubmit}
+            variant="contained"
+            color="success"
+            disabled={submitting || !emergencyDeployForm.amount}
+          >
+            {submitting ? "Deploying..." : "Confirm Deployment"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -42,6 +42,14 @@ export const financeApi = {
     return response.data;
   },
 
+deployEmergencyFund: async (data: {
+    amount: number;
+    description?: string;
+  }): Promise<{ message: string }> => {
+    const response = await apiClient.post("/emergency/deploy", data);
+    return response.data;
+  },
+
   updateLettersTranslated: async (
     lettersCount: number
   ): Promise<{ message: string }> => {
