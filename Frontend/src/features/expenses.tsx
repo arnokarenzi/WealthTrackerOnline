@@ -20,6 +20,7 @@ import {
   Alert,
   Tabs,
   Tab,
+  Tooltip,
 } from "@mui/material";
 import {
   AddCard,
@@ -195,6 +196,18 @@ export default function Expenses() {
         "Could not erase target transactional payload line item."
       );
     }
+  };
+
+  // Helper check to protect Emergency and School Fees contributions from being deleted
+  const isProtectedExpense = (category: string, description: string) => {
+    const cat = (category || "").toLowerCase();
+    const desc = (description || "").toLowerCase();
+    return (
+      cat.includes("emergency") ||
+      cat.includes("school") ||
+      desc.includes("emergency") ||
+      desc.includes("school")
+    );
   };
 
   // Search History
@@ -478,36 +491,54 @@ export default function Expenses() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    expenseList.map((item) => (
-                      <TableRow
-                        key={item.id}
-                        sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
-                      >
-                        <TableCell>
-                          {item.expenseDate ? item.expenseDate.split("T")[0] : ""}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>
-                          {item.description ?? ""}
-                        </TableCell>
-                        <TableCell>{item.category ?? ""}</TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ color: colors.blueAccent[300], fontWeight: 600 }}
+                    expenseList.map((item) => {
+                      const isProtected = isProtectedExpense(item.category, item.description);
+                      return (
+                        <TableRow
+                          key={item.id}
+                          sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                         >
-                          {Number(item?.amount ?? 0).toLocaleString()} RWF
-                        </TableCell>
-                        <TableCell align="center">
-                          <Button
-                            color="error"
-                            size="small"
-                            onClick={() => handleDeleteExpense(item.id)}
-                            sx={{ minWidth: "auto", p: 0.5 }}
+                          <TableCell>
+                            {item.expenseDate ? item.expenseDate.split("T")[0] : ""}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {item.description ?? ""}
+                          </TableCell>
+                          <TableCell>{item.category ?? ""}</TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ color: colors.blueAccent[300], fontWeight: 600 }}
                           >
-                            <DeleteOutline />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                            {Number(item?.amount ?? 0).toLocaleString()} RWF
+                          </TableCell>
+                          <TableCell align="center">
+                            {isProtected ? (
+                              <Tooltip title="Emergency & School Fees contributions cannot be deleted to protect wallet balance consistency.">
+                                <span>
+                                  <Button
+                                    color="error"
+                                    size="small"
+                                    disabled
+                                    sx={{ minWidth: "auto", p: 0.5 }}
+                                  >
+                                    <DeleteOutline />
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            ) : (
+                              <Button
+                                color="error"
+                                size="small"
+                                onClick={() => handleDeleteExpense(item.id)}
+                                sx={{ minWidth: "auto", p: 0.5 }}
+                              >
+                                <DeleteOutline />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
