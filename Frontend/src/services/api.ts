@@ -42,7 +42,7 @@ export const financeApi = {
     return response.data;
   },
 
-deployEmergencyFund: async (data: {
+  deployEmergencyFund: async (data: {
     amount: number;
     description?: string;
   }): Promise<{ message: string }> => {
@@ -79,7 +79,10 @@ deployEmergencyFund: async (data: {
     await apiClient.put("/monthly-budget", budget);
   },
 
-  getWalletIncomeHistory: async (startDate?: string, endDate?: string): Promise<WalletIncomeItem[]> => {
+  getWalletIncomeHistory: async (
+    startDate?: string,
+    endDate?: string
+  ): Promise<WalletIncomeItem[]> => {
     let url = "/monthly-budget/income-history";
     if (startDate && endDate) {
       url += `?startDate=${startDate}&endDate=${endDate}`;
@@ -276,6 +279,27 @@ deployEmergencyFund: async (data: {
 
   updateInvestmentReserve: async (amount: number): Promise<void> => {
     await apiClient.put("/investments/reserve", { amount });
+  },
+
+  // --- TERM CONFIGURATION ENDPOINTS ---
+  getTermConfig: async (): Promise<{
+    id: number | null;
+    term_name: string;
+    target_amount: number;
+  }> => {
+    const response = await apiClient.get("/school-fees/term-config/active");
+    return response.data;
+  },
+
+  updateTermConfig: async (payload: {
+    targetAmount: number;
+    termName?: string;
+  }): Promise<{ message: string }> => {
+    const response = await apiClient.put(
+      "/school-fees/term-config",
+      payload
+    );
+    return response.data;
   },
 };
 

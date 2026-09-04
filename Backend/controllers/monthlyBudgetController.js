@@ -1,6 +1,6 @@
 import { pool } from "../models/MonthlyBudget.js";
 
-// Helper utility to clean up numeric values (fixed isNaN case sensitivity)
+// Helper utility to clean up numeric values
 const n = (val) => {
   const parsed = parseFloat(val);
   return isNaN(parsed) ? 0 : parsed;
@@ -105,17 +105,33 @@ export const initializeProject = async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // 1. Delete all expenses (both active and archived)
     await connection.query("DELETE FROM DailyExpense");
-    await connection.query("DELETE FROM ActualInvestments");
-    await connection.query("DELETE FROM SchoolFees");
-    await connection.query(
-      "UPDATE EmergencyFund SET current_amount = 0 WHERE user_id = 1",
-    );
 
+    // 2. Clear all actual growth holdings / investments
+    await connection.query("DELETE FROM ActualInvestments");
+
+    // 3. Reset Investment Reserve balance pool
+    await connection.query("UPDATE InvestmentReserve SET amount = 0 WHERE id = 1");
+
+    // 4. Clear extra income history
+    await connection.query("DELETE FROM WalletIncome");
+
+    // 5. Clear School Fees history
+    await connection.query("DELETE FROM SchoolFees");
+
+    // 6. Reset Emergency Fund balance
+    await connection.query("UPDATE EmergencyFund SET current_amount = 0 WHERE id = 1");
+
+    // 7. Reset Savings Goals balances
+    await connection.query("UPDATE SavingsGoals SET currentAmount = 0");
+
+    // 8. Reset MonthlyBudget active metrics & wallet balance
+    // (Note: PendingEarnings table is left untouched to keep Shift Salary Rollover intact)
     await connection.query(
       `
       UPDATE MonthlyBudget 
-      SET salary = 0, rent = 0, schoolSaving = 0, 
+      SET salary = 0, otherIncome = 0, rent = 0, schoolSaving = 0, 
           phoneInternet = 0, electricityWater = 0, food = 0, miscellaneous = 0, 
           medical = 0, familySupport = 0, emergencyFund = 0, investment = 0, 
           balance = 0, month = ?, year = ?, translatedLetters = 0, 
@@ -127,7 +143,7 @@ export const initializeProject = async (req, res) => {
 
     await connection.commit();
     res.json({
-      message: "Master reset successful. All history and dependencies cleared.",
+      message: "Master reset successful. All history, reserves, and expenses cleared except Pending Earnings.",
     });
   } catch (err) {
     await connection.rollback();
@@ -192,7 +208,6 @@ export const resetMonth = async (req, res) => {
 
     await connection.commit();
 
-    // 3. Return a clean JSON response (No auto CSV download stream)
     return res.status(200).json({
       message: "Shift reset successful! Expenses moved to archive.",
     });

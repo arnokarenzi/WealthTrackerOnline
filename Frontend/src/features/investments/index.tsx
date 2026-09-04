@@ -68,14 +68,33 @@ export default function Investments() {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
+  const darkInputStyle = {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: "6px",
+    "& .MuiInputBase-input": {
+      color: "#111827",
+      fontWeight: 700,
+      fontSize: "1.05rem",
+    },
+    "& .MuiInputLabel-root": {
+      color: colors.grey[300],
+      "&.Mui-focused": { color: colors.greenAccent[400] },
+    },
+  };
+
   const [reserves, setReserves] = useState<{ [key: string]: CashReserveItem }>({
     Emergency: { current: 0, target: 1000000 },
-    "School Fees": { current: 0, target: 500000 },
+    "School Fees": { current: 0, target: 0 },
     Investments: { current: 0, target: 2000000 },
   });
 
   const [portfolios, setPortfolios] = useState<ActualInvestment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Term School Fees Configuration State
+  const [termName, setTermName] = useState<string>("Current Term");
+  const [isTermModalOpen, setIsTermModalOpen] = useState<boolean>(false);
+  const [termInputValue, setTermInputValue] = useState<string>("");
 
   // Growth Asset Valuation Edit Modal States
   const [isAssetModalOpen, setIsAssetModalOpen] = useState<boolean>(false);
@@ -115,13 +134,20 @@ export default function Investments() {
         investmentReserveData,
         investmentData,
         savingsGoalsData,
+        termConfigData,
       ] = await Promise.all([
         financeApi.getEmergencyFund().catch(() => null),
         financeApi.getSchoolFees().catch(() => null),
         financeApi.getInvestmentReserve().catch(() => null),
         financeApi.getActualInvestments().catch(() => []),
         financeApi.getSavingsGoals().catch(() => []),
+        financeApi.getTermConfig().catch(() => null),
       ]);
+
+      const activeTermTarget = Number(termConfigData?.target_amount ?? 0);
+      if (termConfigData?.term_name) {
+        setTermName(termConfigData.term_name);
+      }
 
       const resolveTarget = (
         keyword: string,
@@ -179,7 +205,7 @@ export default function Investments() {
           ),
           target: resolveTarget(
             "school",
-            500000,
+            activeTermTarget > 0 ? activeTermTarget : 500000,
             schoolObj.target_amount ?? schoolObj.targetAmount,
           ),
         },
@@ -213,6 +239,36 @@ export default function Investments() {
     window.addEventListener("focus", gatherVaultData);
     return () => window.removeEventListener("focus", gatherVaultData);
   }, [gatherVaultData]);
+
+  // Term School Fees Target Edit Handlers
+  const handleOpenTermEdit = () => {
+    setTermInputValue(reserves["School Fees"]?.target.toString() || "");
+    setIsTermModalOpen(true);
+  };
+
+  const handleCloseTermEdit = () => {
+    setIsTermModalOpen(false);
+  };
+
+  const handleTermSubmit = async () => {
+    const numericTarget = Number(termInputValue);
+    if (isNaN(numericTarget) || numericTarget <= 0) return;
+
+    try {
+      setSubmitting(true);
+      await financeApi.updateTermConfig({
+        targetAmount: numericTarget,
+        termName: termName,
+      });
+
+      await gatherVaultData();
+      handleCloseTermEdit();
+    } catch (err) {
+      console.error("Failed to update active term target:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Growth Asset Edit Handlers
   const handleOpenAssetEdit = (asset: ActualInvestment) => {
@@ -412,6 +468,7 @@ export default function Investments() {
                       target > 0 ? (current / target) * 100 : 0;
                     const isInvestCard = cat.title === "Investments";
                     const isEmergencyCard = cat.title === "Emergency";
+                    const isSchoolCard = cat.title === "School Fees";
 
                     return (
                       <Grid item xs={12} sm={6} md={4} key={cat.title}>
@@ -436,9 +493,22 @@ export default function Investments() {
                               <Typography variant="h5" sx={{ fontWeight: 600 }}>
                                 {cat.title}
                               </Typography>
-                              <AccountBalance
-                                sx={{ color: colors.greenAccent[600] }}
-                              />
+                              {isSchoolCard ? (
+                                <IconButton
+                                  size="small"
+                                  onClick={handleOpenTermEdit}
+                                  sx={{
+                                    color: colors.grey[300],
+                                    "&:hover": { color: colors.greenAccent[500] },
+                                  }}
+                                >
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                              ) : (
+                                <AccountBalance
+                                  sx={{ color: colors.greenAccent[600] }}
+                                />
+                              )}
                             </Stack>
                             <Typography
                               variant="h3"
@@ -662,6 +732,56 @@ export default function Investments() {
         )}
       </Box>
 
+      {/* Modal for Adjusting Active Term School Fees Target */}
+      <Dialog
+        open={isTermModalOpen}
+        onClose={handleCloseTermEdit}
+        PaperProps={{
+          sx: {
+            backgroundColor: colors.primary[400],
+            backgroundImage: "none",
+            minWidth: "320px",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Adjust Current Term School Fees Target
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: colors.grey[300], mb: 2 }}>
+            Set the expected target school fees amount for <strong>{termName}</strong>.
+          </Typography>
+          <TextField
+            fullWidth
+            type="number"
+            label="Term Target Amount (RWF)"
+            variant="outlined"
+            value={termInputValue}
+            onChange={(e) => setTermInputValue(e.target.value)}
+            disabled={submitting}
+            autoFocus
+            sx={darkInputStyle}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button
+            onClick={handleCloseTermEdit}
+            disabled={submitting}
+            sx={{ color: colors.grey[200] }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleTermSubmit}
+            variant="contained"
+            color="success"
+            disabled={submitting || !termInputValue}
+          >
+            {submitting ? "Saving..." : "Update Target"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Modal for Editing Growth Asset Valuations */}
       <Dialog
         open={isAssetModalOpen}
@@ -690,8 +810,7 @@ export default function Investments() {
             onChange={(e) => setAssetInputValue(e.target.value)}
             disabled={submitting}
             autoFocus
-            InputLabelProps={{ style: { color: colors.grey[200] } }}
-            inputProps={{ style: { color: "#ffffff" } }}
+            sx={darkInputStyle}
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -765,8 +884,7 @@ export default function Investments() {
               }
               disabled={submitting}
               autoFocus
-              InputLabelProps={{ style: { color: colors.grey[200] } }}
-              inputProps={{ style: { color: "#ffffff" } }}
+              sx={darkInputStyle}
             />
             <TextField
               fullWidth
@@ -777,8 +895,7 @@ export default function Investments() {
                 setDeployForm({ ...deployForm, assetName: e.target.value })
               }
               disabled={submitting}
-              InputLabelProps={{ style: { color: colors.grey[200] } }}
-              inputProps={{ style: { color: "#ffffff" } }}
+              sx={darkInputStyle}
             />
             <TextField
               fullWidth
@@ -789,8 +906,7 @@ export default function Investments() {
                 setDeployForm({ ...deployForm, assetType: e.target.value })
               }
               disabled={submitting}
-              InputLabelProps={{ style: { color: colors.grey[200] } }}
-              inputProps={{ style: { color: "#ffffff" } }}
+              sx={darkInputStyle}
             />
           </Stack>
         </DialogContent>
@@ -865,8 +981,7 @@ export default function Investments() {
               }
               disabled={submitting}
               autoFocus
-              InputLabelProps={{ style: { color: colors.grey[200] } }}
-              inputProps={{ style: { color: "#ffffff" } }}
+              sx={darkInputStyle}
             />
             <TextField
               fullWidth
@@ -877,8 +992,7 @@ export default function Investments() {
                 setEmergencyDeployForm({ ...emergencyDeployForm, description: e.target.value })
               }
               disabled={submitting}
-              InputLabelProps={{ style: { color: colors.grey[200] } }}
-              inputProps={{ style: { color: "#ffffff" } }}
+              sx={darkInputStyle}
             />
           </Stack>
         </DialogContent>
