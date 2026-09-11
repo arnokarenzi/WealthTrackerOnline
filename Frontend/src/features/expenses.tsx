@@ -489,7 +489,7 @@ export default function Expenses() {
                     </TableRow>
                   ) : (
                     expenseList.map((item) => {
-                      const isProtected = isProtectedExpense(item.category, item.description);
+                      const isProtected = isProtectedExpense(item.category);
                       return (
                         <TableRow
                           key={item.id}
