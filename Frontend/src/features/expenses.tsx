@@ -199,14 +199,11 @@ export default function Expenses() {
   };
 
   // Helper check to protect Emergency and School Fees contributions from being deleted
-  const isProtectedExpense = (category: string, description: string) => {
+  const isProtectedExpense = (category: string) => {
     const cat = (category || "").toLowerCase();
-    const desc = (description || "").toLowerCase();
     return (
       cat.includes("emergency") ||
-      cat.includes("school") ||
-      desc.includes("emergency") ||
-      desc.includes("school")
+      cat.includes("school")
     );
   };
 
