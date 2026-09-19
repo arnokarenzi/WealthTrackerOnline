@@ -1,6 +1,24 @@
 import ActualInvestments from "../models/ActualInvestments.js";
 import { pool } from "../models/MonthlyBudget.js";
 
+// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
+const getKigaliDateParts = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kigali",
+    year: "numeric",
+    month: "numeric",
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(now).map((p) => [p.type, p.value])
+  );
+
+  return {
+    month: parseInt(parts.month, 10),
+    year: parseInt(parts.year, 10),
+  };
+};
+
 export const getInvestments = async (req, res) => {
   try {
     const data = await ActualInvestments.getAll();
@@ -53,7 +71,7 @@ export const deleteInvestment = async (req, res) => {
 // DEDUCT FROM RESERVE & DEPLOY TO ASSET
 // ==========================================
 export const deployReserve = async (req, res) => {
-  // 0. Auto-patch schema: ensure table & asset_type column exist
+  // Auto-patch schema: ensure table & asset_type column exist
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ActualInvestments (
@@ -68,13 +86,11 @@ export const deployReserve = async (req, res) => {
       )
     `);
 
-    // Safely add missing asset_type column to existing table
     await pool.query(`
       ALTER TABLE ActualInvestments 
       ADD COLUMN asset_type VARCHAR(100) DEFAULT 'Bond'
     `);
   } catch (schemaErr) {
-    // ER_DUP_FIELDNAME (errno 1060 / sqlState 42S21) means column already exists
     if (schemaErr.errno !== 1060 && schemaErr.code !== "ER_DUP_FIELDNAME") {
       console.warn("Schema patch notice:", schemaErr.message);
     }
@@ -117,10 +133,8 @@ export const deployReserve = async (req, res) => {
       [numAmount],
     );
 
-    // 3. Create new holding record in ActualInvestments
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
+    // 3. Create new holding record in ActualInvestments using Kigali month/year
+    const { month, year } = getKigaliDateParts();
 
     const [result] = await connection.query(
       "INSERT INTO ActualInvestments (asset_name, asset_type, principal_invested, current_value, month, year) VALUES (?, ?, ?, ?, ?, ?)",
@@ -137,9 +151,7 @@ export const deployReserve = async (req, res) => {
   } catch (err) {
     try {
       await connection.rollback();
-    } catch (rbErr) {
-      // Ignore rollback failure if connection/transaction closed
-    }
+    } catch (rbErr) {}
     console.error("Deploy Reserve Error:", err);
     res.status(500).json({ error: err.message });
   } finally {

@@ -1,6 +1,16 @@
 import SchoolFees from "../models/SchoolFees.js";
 import { pool } from "../models/MonthlyBudget.js";
 
+// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
+const getKigaliMonth = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kigali",
+    month: "numeric",
+  });
+  return parseInt(formatter.format(now), 10);
+};
+
 export const getFeesHistory = async (req, res) => {
   try {
     const [rows] = await SchoolFees.getAll();
@@ -37,8 +47,8 @@ export const resetSchoolFeesOnly = async (req, res) => {
 
 export const addSchoolFees = async (req, res) => {
   const { amountSaved } = req.body;
-  // Use numeric month (1-12) to match MySQL INT column definition
-  const currentMonth = new Date().getMonth() + 1;
+  // Use numeric month (1-12) calculated in Kigali local time
+  const currentMonth = getKigaliMonth();
 
   try {
     const numAmount = Number(amountSaved);
@@ -78,11 +88,15 @@ export const addSchoolFees = async (req, res) => {
 export const getActiveTermConfig = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT id, term_name, target_amount FROM TermConfig WHERE is_active = TRUE LIMIT 1"
+      "SELECT id, term_name, target_amount FROM TermConfig WHERE is_active = TRUE LIMIT 1",
     );
 
     if (rows.length === 0) {
-      return res.json({ id: null, term_name: "Current Term", target_amount: 500000 });
+      return res.json({
+        id: null,
+        term_name: "Current Term",
+        target_amount: 500000,
+      });
     }
 
     res.json(rows[0]);
@@ -102,18 +116,18 @@ export const updateTermConfig = async (req, res) => {
 
   try {
     const [existing] = await pool.query(
-      "SELECT id FROM TermConfig WHERE is_active = TRUE LIMIT 1"
+      "SELECT id FROM TermConfig WHERE is_active = TRUE LIMIT 1",
     );
 
     if (existing.length > 0) {
       await pool.query(
         "UPDATE TermConfig SET target_amount = ?, term_name = COALESCE(?, term_name) WHERE is_active = TRUE",
-        [numTarget, termName || null]
+        [numTarget, termName || null],
       );
     } else {
       await pool.query(
         "INSERT INTO TermConfig (term_name, target_amount, is_active) VALUES (?, ?, TRUE)",
-        [termName || "Current Term", numTarget]
+        [termName || "Current Term", numTarget],
       );
     }
 

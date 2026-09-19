@@ -1,5 +1,37 @@
 import { pool } from "../models/MonthlyBudget.js";
 
+// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
+const getKigaliTime = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kigali",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(now).map((p) => [p.type, p.value]),
+  );
+
+  const year = parseInt(parts.year, 10);
+  const month = parseInt(parts.month, 10);
+  const day = parseInt(parts.day, 10);
+  let hour = parseInt(parts.hour, 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(parts.minute, 10);
+  const second = parseInt(parts.second, 10);
+
+  const pad = (num) => String(num).padStart(2, "0");
+  const dateString = `${year}-${pad(month)}-${pad(day)}`;
+  const dateTimeString = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+
+  return { year, month, day, hour, minute, second, dateString, dateTimeString };
+};
+
 // Helper utility to clean up numeric values
 const n = (val) => {
   const parsed = parseFloat(val);
@@ -9,8 +41,18 @@ const n = (val) => {
 const v = (val) => Number(val) || 0;
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 export const getBudget = async (req, res) => {
@@ -31,10 +73,25 @@ export const getBudget = async (req, res) => {
 
 export const updateBudget = async (req, res) => {
   const {
-    salary, rent, schoolSaving, phoneInternet, electricityWater, food,
-    miscellaneous, medical, familySupport, emergencyFund, investment,
-    balance, month, year, translatedLetters, recommendedEssentials,
-    recommendedEmergency, recommendedInvest, recommendedDiscretionary,
+    salary,
+    rent,
+    schoolSaving,
+    phoneInternet,
+    electricityWater,
+    food,
+    miscellaneous,
+    medical,
+    familySupport,
+    emergencyFund,
+    investment,
+    balance,
+    month,
+    year,
+    translatedLetters,
+    recommendedEssentials,
+    recommendedEmergency,
+    recommendedInvest,
+    recommendedDiscretionary,
     shiftLetters,
   } = req.body;
 
@@ -49,11 +106,26 @@ export const updateBudget = async (req, res) => {
       WHERE id = 1
     `;
     await pool.query(sql, [
-      n(salary), n(rent), n(schoolSaving), n(phoneInternet),
-      n(electricityWater), n(food), n(miscellaneous), n(medical), n(familySupport),
-      n(emergencyFund), n(investment), n(balance), n(month), n(year), n(translatedLetters),
-      n(recommendedEssentials), n(recommendedEmergency), n(recommendedInvest),
-      n(recommendedDiscretionary), n(shiftLetters),
+      n(salary),
+      n(rent),
+      n(schoolSaving),
+      n(phoneInternet),
+      n(electricityWater),
+      n(food),
+      n(miscellaneous),
+      n(medical),
+      n(familySupport),
+      n(emergencyFund),
+      n(investment),
+      n(balance),
+      n(month),
+      n(year),
+      n(translatedLetters),
+      n(recommendedEssentials),
+      n(recommendedEmergency),
+      n(recommendedInvest),
+      n(recommendedDiscretionary),
+      n(shiftLetters),
     ]);
     res.json({ message: "Budget records saved successfully!" });
   } catch (err) {
@@ -82,7 +154,7 @@ export const addExtraIncome = async (req, res) => {
     // Record incoming wallet ledger entry
     await connection.query(
       "INSERT INTO WalletIncome (amount, description, source_type) VALUES (?, ?, 'side_income')",
-      [numAmount, incomeDesc]
+      [numAmount, incomeDesc],
     );
 
     await connection.commit();
@@ -103,6 +175,7 @@ export const addExtraIncome = async (req, res) => {
 export const initializeProject = async (req, res) => {
   const connection = await pool.getConnection();
   try {
+    const kigali = getKigaliTime();
     await connection.beginTransaction();
 
     // 1. Delete all expenses (both active and archived)
@@ -112,7 +185,9 @@ export const initializeProject = async (req, res) => {
     await connection.query("DELETE FROM ActualInvestments");
 
     // 3. Reset Investment Reserve balance pool
-    await connection.query("UPDATE InvestmentReserve SET amount = 0 WHERE id = 1");
+    await connection.query(
+      "UPDATE InvestmentReserve SET amount = 0 WHERE id = 1",
+    );
 
     // 4. Clear extra income history
     await connection.query("DELETE FROM WalletIncome");
@@ -121,13 +196,14 @@ export const initializeProject = async (req, res) => {
     await connection.query("DELETE FROM SchoolFees");
 
     // 6. Reset Emergency Fund balance
-    await connection.query("UPDATE EmergencyFund SET current_amount = 0 WHERE id = 1");
+    await connection.query(
+      "UPDATE EmergencyFund SET current_amount = 0 WHERE id = 1",
+    );
 
     // 7. Reset Savings Goals balances
     await connection.query("UPDATE SavingsGoals SET currentAmount = 0");
 
-    // 8. Reset MonthlyBudget active metrics & wallet balance
-    // (Note: PendingEarnings table is left untouched to keep Shift Salary Rollover intact)
+    // 8. Reset MonthlyBudget active metrics & wallet balance using Kigali month & year
     await connection.query(
       `
       UPDATE MonthlyBudget 
@@ -138,12 +214,13 @@ export const initializeProject = async (req, res) => {
           shiftLetters = 0
       WHERE id = 1
     `,
-      [new Date().getMonth() + 1, new Date().getFullYear()],
+      [kigali.month, kigali.year],
     );
 
     await connection.commit();
     res.json({
-      message: "Master reset successful. All history, reserves, and expenses cleared except Pending Earnings.",
+      message:
+        "Master reset successful. All history, reserves, and expenses cleared except Pending Earnings.",
     });
   } catch (err) {
     await connection.rollback();
@@ -154,39 +231,39 @@ export const initializeProject = async (req, res) => {
   }
 };
 
-// 🔄 CLEAN RESET: Only rolls salary into PendingEarnings. No auto-transfers to Emergency, School, or Investments.
+// 🔄 CLEAN RESET: Only rolls salary into PendingEarnings using Kigali timestamp.
 export const resetMonth = async (req, res) => {
   const connection = await pool.getConnection();
   try {
+    const kigali = getKigaliTime();
     await connection.beginTransaction();
 
     // 1. Fetch current budget state
     const [budgetRows] = await connection.query(
-      "SELECT * FROM MonthlyBudget WHERE id = 1"
+      "SELECT * FROM MonthlyBudget WHERE id = 1",
     );
 
     if (budgetRows.length > 0) {
       const b = budgetRows[0];
       const expectedSalary = v(b.salary);
 
-      const now = new Date();
-      const monthName = MONTH_NAMES[now.getMonth()];
-      const yearNum = now.getFullYear();
-      
+      const monthName = MONTH_NAMES[kigali.month - 1];
+      const yearNum = kigali.year;
+
       // Dynamic description format: "Shift Payment: August 2026"
       const shiftRolloverDesc = `Shift Payment: ${monthName} ${yearNum}`;
 
-      // Stage earned salary to pending earnings
+      // Stage earned salary to pending earnings using explicit Kigali timestamp
       if (expectedSalary > 0) {
         await connection.query(
           `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
-           VALUES (?, ?, NOW(), FALSE)`,
-          [expectedSalary, shiftRolloverDesc]
+           VALUES (?, ?, ?, FALSE)`,
+          [expectedSalary, shiftRolloverDesc, kigali.dateTimeString],
         );
       }
 
-      const currentRealMonth = now.getMonth() + 1;
-      const currentRealYear = now.getFullYear();
+      const currentRealMonth = kigali.month;
+      const currentRealYear = kigali.year;
       const currentWalletBalance = v(b.balance);
 
       // Reset active budget counters for the new shift cycle
@@ -197,13 +274,13 @@ export const resetMonth = async (req, res) => {
            emergencyFund = 0, investment = 0, balance = ?,
            translatedLetters = 0, shiftLetters = 0
          WHERE id = 1`,
-        [currentRealMonth, currentRealYear, currentWalletBalance]
+        [currentRealMonth, currentRealYear, currentWalletBalance],
       );
     }
 
     // 2. Archive active expenses instead of deleting them
     await connection.query(
-      "UPDATE DailyExpense SET is_archived = 1 WHERE is_archived = 0"
+      "UPDATE DailyExpense SET is_archived = 1 WHERE is_archived = 0",
     );
 
     await connection.commit();

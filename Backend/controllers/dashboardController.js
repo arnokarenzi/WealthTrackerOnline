@@ -1,5 +1,48 @@
 import { pool } from "../models/MonthlyBudget.js";
 
+// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
+const getKigaliTime = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kigali",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(now).map((p) => [p.type, p.value]),
+  );
+
+  const year = parseInt(parts.year, 10);
+  const month = parseInt(parts.month, 10);
+  const day = parseInt(parts.day, 10);
+  let hour = parseInt(parts.hour, 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(parts.minute, 10);
+  const second = parseInt(parts.second, 10);
+
+  const pad = (num) => String(num).padStart(2, "0");
+  const dateString = `${year}-${pad(month)}-${pad(day)}`;
+  const dateTimeString = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    dateString,
+    dateTimeString,
+    lastDayOfMonth,
+  };
+};
+
 const n = (v) => {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -10,6 +53,8 @@ const MAX_SHIFT_LETTERS = 750;
 
 export const getDashboard = async (req, res) => {
   try {
+    const kigali = getKigaliTime();
+
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
     if (!rows.length) {
       return res.status(404).json({ error: "Budget row not found" });
@@ -59,13 +104,9 @@ export const getDashboard = async (req, res) => {
       n(b.medical) +
       n(b.familySupport);
 
-    const now = new Date();
-    const day = now.getDate();
-    const lastDayOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-    ).getDate();
+    // Precise Kigali calendar shift computations
+    const day = kigali.day;
+    const lastDayOfMonth = kigali.lastDayOfMonth;
 
     const isShift1 = day <= 15;
     const totalDaysInShift = isShift1 ? 15 : lastDayOfMonth - 15;
@@ -74,17 +115,16 @@ export const getDashboard = async (req, res) => {
     const shiftLetters = n(b.shiftLetters);
     const remainingToMax = MAX_SHIFT_LETTERS - shiftLetters;
 
-    // --- NEW GRANULAR TIME MATH FOR MEDALS ---
+    // --- GRANULAR KIGALI TIME MATH FOR MEDALS ---
     const completedDays = Math.max(0, shiftDay - 1);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const fractionOfToday = (currentHour + currentMinute / 60) / 24; 
+    const currentHour = kigali.hour;
+    const currentMinute = kigali.minute;
+    const fractionOfToday = (currentHour + currentMinute / 60) / 24;
     const preciseDaysElapsed = completedDays + fractionOfToday;
 
     const dailyMax = MAX_SHIFT_LETTERS / totalDaysInShift;
     const dailyMin = (MAX_SHIFT_LETTERS * 0.9) / totalDaysInShift;
 
-    // Use precise fraction instead of whole integer to calculate pace targets
     const maxPace = preciseDaysElapsed * dailyMax;
     const minPace = preciseDaysElapsed * dailyMin;
 
@@ -97,7 +137,7 @@ export const getDashboard = async (req, res) => {
       variant: "light",
       behind: 0,
       isLastDay: day === 15 || day === lastDayOfMonth,
-      shiftDay, 
+      shiftDay,
       totalDaysInShift,
       isShift1,
       currentDay: day,
@@ -119,20 +159,21 @@ export const getDashboard = async (req, res) => {
       shiftStatus.message = `Slightly behind pace. Add ${toSilver} more letters to reach Silver territory.`;
       shiftStatus.variant = "success";
     } else {
-      shiftStatus.behind = Math.round((maxPace * 0.8) - shiftLetters);
+      shiftStatus.behind = Math.round(maxPace * 0.8 - shiftLetters);
       shiftStatus.medal = "⚠️ Danger";
       shiftStatus.message = `DANGER: You are ${shiftStatus.behind} letters behind the safety guard!`;
       shiftStatus.variant = "danger";
     }
 
-    // --- NEW PROJECTED PAY MATH (Never falls below actual typed amount) ---
     let projectedPay = 0;
     if (shiftStatus.medal.includes("Gold")) {
       projectedPay = MAX_SHIFT_LETTERS * RATE_PER_LETTER;
     } else if (shiftStatus.medal.includes("Silver")) {
-      projectedPay = Math.max(shiftLetters, (MAX_SHIFT_LETTERS * 0.9)) * RATE_PER_LETTER;
+      projectedPay =
+        Math.max(shiftLetters, MAX_SHIFT_LETTERS * 0.9) * RATE_PER_LETTER;
     } else if (shiftStatus.medal.includes("Bronze")) {
-      projectedPay = Math.max(shiftLetters, (MAX_SHIFT_LETTERS * 0.8)) * RATE_PER_LETTER;
+      projectedPay =
+        Math.max(shiftLetters, MAX_SHIFT_LETTERS * 0.8) * RATE_PER_LETTER;
     } else {
       projectedPay = shiftLetters * RATE_PER_LETTER;
     }
@@ -218,21 +259,27 @@ export const updateLetters = async (req, res) => {
 
 export const resetShift = async (req, res) => {
   try {
+    const kigali = getKigaliTime();
+
     // 1. Fetch completed shift letters before reset
     const [rows] = await pool.query(
-      "SELECT shiftLetters FROM MonthlyBudget WHERE id = 1"
+      "SELECT shiftLetters FROM MonthlyBudget WHERE id = 1",
     );
-    
+
     if (rows.length > 0) {
       const currentShiftLetters = n(rows[0].shiftLetters);
       const earnedAmount = currentShiftLetters * RATE_PER_LETTER;
 
-      // 2. Insert into PendingEarnings matching actual schema columns
+      // 2. Insert into PendingEarnings with explicit Kigali timestamp
       if (earnedAmount > 0) {
         await pool.query(
           `INSERT INTO PendingEarnings (amount, description, is_collected, earned_date) 
-           VALUES (?, ?, 0, NOW())`,
-          [earnedAmount, `Shift Salary (${currentShiftLetters} letters)`]
+           VALUES (?, ?, 0, ?)`,
+          [
+            earnedAmount,
+            `Shift Salary (${currentShiftLetters} letters)`,
+            kigali.dateTimeString,
+          ],
         );
       }
     }
@@ -246,13 +293,14 @@ export const resetShift = async (req, res) => {
       WHERE id = 1
     `);
 
-    res.json({ message: "Shift reset successful! Earnings moved to Pending Buffer." });
+    res.json({
+      message: "Shift reset successful! Earnings moved to Pending Buffer.",
+    });
   } catch (err) {
     console.error("Reset Shift Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
-
 
 export const updateMonthlyBudget = async (req, res) => {
   const { id } = req.params;

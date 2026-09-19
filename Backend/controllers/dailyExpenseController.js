@@ -1,6 +1,38 @@
 import DailyExpense from "../models/DailyExpense.js";
 import { pool } from "../models/MonthlyBudget.js";
 
+// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
+const getKigaliTime = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kigali",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(now).map((p) => [p.type, p.value]),
+  );
+
+  const year = parseInt(parts.year, 10);
+  const month = parseInt(parts.month, 10);
+  const day = parseInt(parts.day, 10);
+  let hour = parseInt(parts.hour, 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(parts.minute, 10);
+  const second = parseInt(parts.second, 10);
+
+  const pad = (num) => String(num).padStart(2, "0");
+  const dateString = `${year}-${pad(month)}-${pad(day)}`;
+  const dateTimeString = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+
+  return { year, month, day, hour, minute, second, dateString, dateTimeString };
+};
+
 const n = (v) => {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -10,7 +42,7 @@ const n = (v) => {
 export const getExpenses = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM DailyExpense WHERE is_archived = 0 ORDER BY expenseDate DESC"
+      "SELECT * FROM DailyExpense WHERE is_archived = 0 ORDER BY expenseDate DESC",
     );
     res.json(rows);
   } catch (err) {
@@ -33,7 +65,7 @@ export const getExpenseHistory = async (req, res) => {
        WHERE is_archived = 1 
          AND expenseDate BETWEEN ? AND ? 
        ORDER BY expenseDate DESC`,
-      [startDate, endDate]
+      [startDate, endDate],
     );
     res.json(rows);
   } catch (err) {
@@ -57,6 +89,7 @@ export const addExpense = async (req, res) => {
   const connection = await pool.getConnection();
 
   try {
+    const kigali = getKigaliTime();
     const { expenseDate, description, category, amount, notes } = req.body;
     const numAmount = n(amount);
 
@@ -70,72 +103,68 @@ export const addExpense = async (req, res) => {
 
     await connection.beginTransaction();
 
+    const targetDate = expenseDate || kigali.dateString;
+
     const [result] = await connection.query(
       "INSERT INTO DailyExpense (expenseDate, description, category, amount, notes, is_archived) VALUES (?, ?, ?, ?, ?, 0)",
-      [
-        expenseDate || new Date().toISOString().split("T")[0],
-        description || "",
-        finalCategory,
-        numAmount,
-        notes || "",
-      ]
+      [targetDate, description || "", finalCategory, numAmount, notes || ""],
     );
 
     const [mbRows] = await connection.query(
-      "SELECT id FROM MonthlyBudget WHERE id = 1"
+      "SELECT id FROM MonthlyBudget WHERE id = 1",
     );
     if (mbRows.length > 0) {
       await connection.query(
         "UPDATE MonthlyBudget SET balance = balance - ? WHERE id = 1",
-        [numAmount]
+        [numAmount],
       );
     }
 
     if (finalCategory === "emergencyFund") {
       const [emRows] = await connection.query(
-        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1",
       );
       if (emRows.length > 0) {
         await connection.query(
           "UPDATE EmergencyFund SET current_amount = COALESCE(current_amount, 0) + ? WHERE id = ?",
-          [numAmount, emRows[0].id]
+          [numAmount, emRows[0].id],
         );
       } else {
         await connection.query(
           "INSERT INTO EmergencyFund (id, current_amount) VALUES (1, ?)",
-          [numAmount]
+          [numAmount],
         );
       }
     } else if (finalCategory === "schoolSaving") {
-      const currentMonthInt = new Date().getMonth() + 1;
+      const currentMonthInt = kigali.month;
       const [existing] = await connection.query(
-        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1",
       );
 
       if (existing.length > 0) {
         await connection.query(
           "UPDATE SchoolFees SET amountSaved = COALESCE(amountSaved, 0) + ?, cumulative = COALESCE(cumulative, 0) + ? WHERE id = ?",
-          [numAmount, numAmount, existing[0].id]
+          [numAmount, numAmount, existing[0].id],
         );
       } else {
         await connection.query(
           "INSERT INTO SchoolFees (month, amountSaved, cumulative) VALUES (?, ?, ?)",
-          [currentMonthInt, numAmount, numAmount]
+          [currentMonthInt, numAmount, numAmount],
         );
       }
     } else if (finalCategory === "investment") {
       const [invRows] = await connection.query(
-        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1",
       );
       if (invRows.length > 0) {
         await connection.query(
           "UPDATE InvestmentReserve SET amount = COALESCE(amount, 0) + ? WHERE id = ?",
-          [numAmount, invRows[0].id]
+          [numAmount, invRows[0].id],
         );
       } else {
         await connection.query(
           "INSERT INTO InvestmentReserve (id, amount) VALUES (1, ?)",
-          [numAmount]
+          [numAmount],
         );
       }
     }
@@ -145,7 +174,7 @@ export const addExpense = async (req, res) => {
     res.status(201).json({
       message: "Expense saved!",
       id: result.insertId,
-      expenseDate,
+      expenseDate: targetDate,
       description,
       category: finalCategory,
       amount: numAmount,
@@ -170,7 +199,7 @@ export const deleteExpense = async (req, res) => {
 
     const [expenseRows] = await connection.query(
       "SELECT expenseDate, category, amount FROM DailyExpense WHERE id = ?",
-      [expenseId]
+      [expenseId],
     );
 
     if (expenseRows.length === 0) {
@@ -189,40 +218,40 @@ export const deleteExpense = async (req, res) => {
 
     await connection.query(
       "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
-      [expenseAmount]
+      [expenseAmount],
     );
 
     const catLower = (category || "").toLowerCase();
 
     if (catLower.includes("emergency")) {
       const [emRows] = await connection.query(
-        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM EmergencyFund ORDER BY id DESC LIMIT 1",
       );
       if (emRows.length > 0) {
         await connection.query(
           "UPDATE EmergencyFund SET current_amount = GREATEST(0, COALESCE(current_amount, 0) - ?) WHERE id = ?",
-          [expenseAmount, emRows[0].id]
+          [expenseAmount, emRows[0].id],
         );
       }
     } else if (catLower.includes("school")) {
       const [existing] = await connection.query(
-        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM SchoolFees ORDER BY id DESC LIMIT 1",
       );
 
       if (existing.length > 0) {
         await connection.query(
           "UPDATE SchoolFees SET amountSaved = GREATEST(0, COALESCE(amountSaved, 0) - ?), cumulative = GREATEST(0, COALESCE(cumulative, 0) - ?) WHERE id = ?",
-          [expenseAmount, expenseAmount, existing[0].id]
+          [expenseAmount, expenseAmount, existing[0].id],
         );
       }
     } else if (catLower.includes("invest")) {
       const [invRows] = await connection.query(
-        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1"
+        "SELECT id FROM InvestmentReserve ORDER BY id DESC LIMIT 1",
       );
       if (invRows.length > 0) {
         await connection.query(
           "UPDATE InvestmentReserve SET amount = GREATEST(0, COALESCE(amount, 0) - ?) WHERE id = ?",
-          [expenseAmount, invRows[0].id]
+          [expenseAmount, invRows[0].id],
         );
       }
     }
