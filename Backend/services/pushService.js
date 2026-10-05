@@ -17,8 +17,7 @@ const getConfig = () => ({
   subject: process.env.VAPID_SUBJECT,
   publicKey: process.env.VAPID_PUBLIC_KEY,
   privateKey: process.env.VAPID_PRIVATE_KEY,
-  appUrl:
-    process.env.PUSH_APP_URL || "https://mentorg.github.io/fintrack/#/",
+  appUrl: process.env.PUSH_APP_URL || "https://mentorg.github.io/fintrack/#/",
 });
 
 const configureWebPush = () => {
@@ -37,7 +36,8 @@ const configureWebPush = () => {
 export const ensurePushSubscriptionTable = async () => {
   if (!pushSchemaReadyPromise) {
     pushSchemaReadyPromise = pool
-      .query(`
+      .query(
+        `
         CREATE TABLE IF NOT EXISTS PushSubscriptions (
           id INT NOT NULL AUTO_INCREMENT,
           endpoint TEXT NOT NULL,
@@ -50,7 +50,8 @@ export const ensurePushSubscriptionTable = async () => {
           PRIMARY KEY (id),
           UNIQUE KEY unique_endpoint_hash (endpoint_hash)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `)
+      `,
+      )
       .catch((error) => {
         pushSchemaReadyPromise = null;
         throw error;
@@ -110,10 +111,9 @@ export const removePushSubscription = async (endpoint) => {
   if (!endpoint) return;
   await ensurePushSubscriptionTable();
   const endpointHash = await hashEndpoint(endpoint);
-  await pool.query(
-    "DELETE FROM PushSubscriptions WHERE endpoint_hash = ?",
-    [endpointHash],
-  );
+  await pool.query("DELETE FROM PushSubscriptions WHERE endpoint_hash = ?", [
+    endpointHash,
+  ]);
 };
 
 const getSubscriptions = async () => {
@@ -178,7 +178,6 @@ const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
   return { configured: true, attempted: rows.length, sent };
 };
 
-
 const validateSubscription = (subscription) => {
   if (
     !subscription?.endpoint ||
@@ -225,7 +224,9 @@ export const sendTestNotificationToSubscription = async ({
     body = `You have ${status.remainingShiftLetters} letters left across ${status.remainingDaysInShift} days. Complete ${Math.max(0, Number(status.dailyTarget || 0) - Number(status.dailyLetterCount || 0))} letters today to stay on track for your Gold bonus!`;
     tag = "test-shift-pacing-18";
   } else if (testKind === "target") {
-    const target = Number(status.dailyTarget || status.currentRequiredPerDay || 0);
+    const target = Number(
+      status.dailyTarget || status.currentRequiredPerDay || 0,
+    );
     title = "Daily Target Complete 🎉";
     body = `You have reached ${target} letters for today. Daily target complete!`;
     tag = "test-daily-target-complete";
@@ -285,7 +286,12 @@ export const sendDailyTargetReachedNotification = async ({
 
   const subscriptions = await getSubscriptions();
   if (!subscriptions.length) {
-    return { configured: true, attempted: 0, sent: 0, skipped: "no-subscriptions" };
+    return {
+      configured: true,
+      attempted: 0,
+      sent: 0,
+      skipped: "no-subscriptions",
+    };
   }
 
   // Claim the one-per-day completion notification slot atomically.
@@ -350,7 +356,9 @@ export const sendShiftPacingAlertNotification = async ({
   const hour = Number(triggerHour);
 
   if (![8, 12, 18].includes(hour)) {
-    throw new Error("Pacing notification trigger must be 8, 12, or 18 Kigali time.");
+    throw new Error(
+      "Pacing notification trigger must be 8, 12, or 18 Kigali time.",
+    );
   }
 
   if (!force && pacing.targetReached) {
@@ -432,10 +440,17 @@ export const sendShiftPacingAlertNotification = async ({
 
 // Called by the Render cron process. At 08:00 the target itself is locked;
 // at 12:00 and 18:00 only the live headline/remaining numbers change.
-export const runScheduledPacingNotification = async () => {
+
+export const runScheduledPacingNotification = async ({
+  allowTest = false,
+} = {}) => {
   const kigali = getKigaliTime();
 
-  if (![8, 12, 18].includes(kigali.hour)) {
+  // Normal cron requests are only allowed at:
+  // 08:00, 12:00, and 18:00 Kigali time.
+  //
+  // Authenticated test requests can bypass this check.
+  if (!allowTest && ![8, 12, 18].includes(kigali.hour)) {
     return {
       skipped: true,
       reason: "not-a-scheduled-kigali-hour",
@@ -445,35 +460,53 @@ export const runScheduledPacingNotification = async () => {
 
   await ensureDailyLetterTable();
 
-  if (kigali.hour === 8) {
+  // For a test request, we need to choose a valid scheduler
+  // trigger hour so the existing notification logic can run.
+  //
+  // If we're outside 08/12/18, use 12 as the test trigger.
+  const triggerHour = [8, 12, 18].includes(kigali.hour) ? kigali.hour : 12;
+
+  if (triggerHour === 8) {
     const status = await lockMorningPacingTarget();
 
     if (status.targetReached) {
-      const completion = await sendDailyTargetReachedNotification({
-        dailyTarget: status.dailyTarget,
-        letterCount: status.dailyLetterCount,
-        date: status.date,
-      });
-      return { scheduledHour: 8, status, completion };
+      return {
+        scheduledHour: 8,
+        status,
+        skipped: "daily-target-reached",
+      };
     }
 
     const pacing = await sendShiftPacingAlertNotification({
       triggerHour: 8,
       date: status.date,
     });
-    return { scheduledHour: 8, status, pacing };
+
+    return {
+      scheduledHour: 8,
+      status,
+      pacing,
+    };
   }
 
   const status = await getDailyPacingStatus();
 
   if (status.targetReached) {
-    return { scheduledHour: kigali.hour, status, skipped: "daily-target-reached" };
+    return {
+      scheduledHour: triggerHour,
+      status,
+      skipped: "daily-target-reached",
+    };
   }
 
   const pacing = await sendShiftPacingAlertNotification({
-    triggerHour: kigali.hour,
+    triggerHour,
     date: status.date,
   });
 
-  return { scheduledHour: kigali.hour, status, pacing };
+  return {
+    scheduledHour: triggerHour,
+    status,
+    pacing,
+  };
 };
