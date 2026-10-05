@@ -48,6 +48,12 @@ export interface DashboardSummary {
   schoolFeesBalance: number;
   investmentReserveBalance: number;
   emergencyReserveBalance: number;
+  dailyLetterTarget: number;
+  dailyLetterCount: number;
+  dailyLettersRemaining: number;
+  dailyTargetReached: boolean;
+  dailyNotificationSent: boolean;
+  dailyLetterDate: string;
   pendingEmergencyTotal: number;
   stagedSalaryPortion: number;
   stagedSidePortion: number;
@@ -118,6 +124,7 @@ export interface PendingEarningItem {
 
 
 export interface PendingEmergencySnapshot {
+
   pending: boolean;
   snapshotCount: number;
   latestSnapshotId: number | null;
@@ -126,6 +133,25 @@ export interface PendingEmergencySnapshot {
   salaryPortion: number;
   sideIncomePortion: number;
   totalAmount: number;
+}
+
+export interface PendingEmergencySnapshotSummary extends PendingEmergencySnapshot {}
+
+export interface DailyLetterStatus {
+  date: string;
+  shiftDay: number;
+  totalDaysInShift: number;
+  shiftLetters: number;
+  remainingShiftLetters: number;
+  remainingDaysInShift: number;
+  currentRequiredPerDay: number;
+  dailyTarget: number;
+  dailyLetterCount: number;
+  dailyRemaining: number;
+  targetReached: boolean;
+  notificationSent: boolean;
+  targetReachedAt: string | null;
+  pacingTargetSetAt: string | null;
 }
 
 export interface WalletIncomeItem {

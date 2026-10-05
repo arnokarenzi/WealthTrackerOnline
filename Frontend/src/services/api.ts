@@ -13,8 +13,9 @@ import {
   AllocationRecommendations,
   AllocationResponse,
   ReserveFundInfo,
+  PendingEmergencySnapshotSummary,
+  DailyLetterStatus,
   TermConfig,
-  PendingEmergencySnapshot,
 } from "../types/api";
 
 const DEV_API_URL = "http://localhost:5000/api";
@@ -63,27 +64,67 @@ export const financeApi = {
     return response.data;
   },
 
-  depositEmergency: async (
-    amount: number,
-  ): Promise<{ message: string; newTotal: number; walletBalance?: number }> => {
-    const response = await apiClient.post("/emergency/deposit", { amount });
-    return response.data;
-  },
-
-  getPendingEmergency: async (): Promise<PendingEmergencySnapshot> => {
-    const response = await apiClient.get<PendingEmergencySnapshot>("/emergency/pending");
+  getPendingEmergency: async (): Promise<PendingEmergencySnapshotSummary> => {
+    const response = await apiClient.get<PendingEmergencySnapshotSummary>(
+      "/emergency/pending",
+    );
     return response.data;
   },
 
   claimPendingEmergency: async (): Promise<{
     message: string;
     depositedAmount: number;
-    salaryPortion: number;
-    sideIncomePortion: number;
     newTotal: number;
-    walletBalance: number;
   }> => {
     const response = await apiClient.post("/emergency/pending/claim");
+    return response.data;
+  },
+
+  depositEmergency: async (
+    amount: number,
+  ): Promise<{ message: string; newTotal: number }> => {
+    const response = await apiClient.post("/emergency/deposit", { amount });
+    return response.data;
+  },
+
+  // --- DAILY LETTER NOTIFICATIONS ---
+  getDailyLetterStatus: async (): Promise<DailyLetterStatus> => {
+    const response = await apiClient.get<DailyLetterStatus>(
+      "/daily-letters",
+    );
+    return response.data;
+  },
+
+  getPushPublicKey: async (): Promise<{ publicKey: string }> => {
+    const response = await apiClient.get<{ publicKey: string }>(
+      "/push/public-key",
+    );
+    return response.data;
+  },
+
+  savePushSubscription: async (subscription: PushSubscriptionJSON): Promise<void> => {
+    await apiClient.post("/push/subscribe", subscription);
+  },
+
+  removePushSubscription: async (endpoint: string): Promise<void> => {
+    await apiClient.post("/push/unsubscribe", { endpoint });
+  },
+
+
+  sendTestPushNotification: async (
+    subscription: PushSubscriptionJSON,
+    kind: "morning" | "midday" | "evening" | "target",
+  ): Promise<{
+    ok: boolean;
+    test: boolean;
+    kind: string;
+    title: string;
+    body: string;
+  }> => {
+    const response = await apiClient.post("/push/test", {
+      subscription,
+      kind,
+    });
     return response.data;
   },
 
@@ -113,8 +154,24 @@ export const financeApi = {
 
   recordTranslatedLetters: async (
     newLetters: number | string,
-  ): Promise<void> => {
-    await apiClient.post("/dashboard/letters", { newLetters });
+  ): Promise<{
+    success: boolean;
+    addedLetters: number;
+    translatedLetters: number;
+    shiftLetters: number;
+    dailyLetterTarget: number;
+    dailyLetterCount: number;
+    dailyLettersRemaining: number;
+    dailyTargetReached: boolean;
+    dailyRequiredPerDay: number;
+    dailyShiftDay: number;
+    dailyShiftTotalDays: number;
+    dailyShiftLetters: number;
+    dailyShiftLettersRemaining: number;
+    dailyRemainingDaysInShift: number;
+  }> => {
+    const response = await apiClient.post("/dashboard/letters", { newLetters });
+    return response.data;
   },
 
   resetActiveShift: async (): Promise<{ message: string }> => {

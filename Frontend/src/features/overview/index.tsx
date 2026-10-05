@@ -34,6 +34,7 @@ import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
+import DailyLetterNotificationSettings from "../../components/DailyLetterNotificationSettings";
 
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
@@ -52,9 +53,9 @@ interface DashboardSummary {
   wealthScore: number;
   shiftStatus: ShiftStatusSummary;
   monthlyBudget: MonthlyBudget;
-  walletBalance?: number;
-  investmentReserveBalance?: number;
-  emergencyReserveBalance?: number;
+  walletBalance: number;
+  investmentReserveBalance: number;
+  emergencyReserveBalance: number;
 }
 
 interface DailyExpense {
@@ -93,13 +94,14 @@ export default function Overview() {
         getExpenses?: () => Promise<DailyExpense[]>;
       };
 
-      const [budgetPlan, dashboardSummary, expensesData] = await Promise.all([
-        secureApi.getBudgetPlan().catch(() => null),
-        secureApi.getDashboardSummary().catch(() => null),
-        secureApi.getExpenses
-          ? secureApi.getExpenses().catch(() => [])
-          : Promise.resolve([]),
-      ]);
+      const [budgetPlan, dashboardSummary, expensesData] =
+        await Promise.all([
+          secureApi.getBudgetPlan().catch(() => null),
+          secureApi.getDashboardSummary().catch(() => null),
+          secureApi.getExpenses
+            ? secureApi.getExpenses().catch(() => [])
+            : Promise.resolve([]),
+        ]);
 
       if (budgetPlan) setLiveBudget(budgetPlan);
       if (dashboardSummary) setDashboardData(dashboardSummary);
@@ -273,6 +275,9 @@ export default function Overview() {
             leakageThreshold={30000}
           />
         </Box>
+
+        {/* Daily target tracking and iPhone notifications */}
+        <DailyLetterNotificationSettings />
 
         {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
         <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>

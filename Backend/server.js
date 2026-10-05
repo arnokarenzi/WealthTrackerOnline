@@ -15,6 +15,8 @@ import alertsRoutes from "./routes/alertsRoutes.js";
 import emergencyRoutes from "./routes/emergencyRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import pendingEarningsRouter from "./routes/pendingEarningsRoutes.js";
+import pushRoutes from "./routes/pushRoutes.js";
+import dailyLetterRoutes from "./routes/dailyLetterRoutes.js";
 
 dotenv.config();
 
@@ -45,6 +47,8 @@ app.use("/api/gratitude", gratitudeRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/pending-earnings", pendingEarningsRouter);
+app.use("/api/push", pushRoutes);
+app.use("/api/daily-letters", dailyLetterRoutes);
 
 app.get("/", (req, res) => {
   res.send("WealthTrackerOnline Backend API is operating perfectly!");

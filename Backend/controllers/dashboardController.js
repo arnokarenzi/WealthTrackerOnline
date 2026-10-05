@@ -1,4 +1,11 @@
 import { pool } from "../models/MonthlyBudget.js";
+import {
+  MAX_SHIFT_LETTERS,
+  ensureDailyLetterTable,
+  getDailyPacingStatus,
+  recordDailyLetters,
+} from "../services/dailyLetterService.js";
+import { sendDailyTargetReachedNotification } from "../services/pushService.js";
 
 const getKigaliTime = () => {
   const now = new Date();
@@ -48,7 +55,6 @@ const n = (v) => {
 };
 
 const RATE_PER_LETTER = 245;
-const MAX_SHIFT_LETTERS = 750;
 
 export const getDashboard = async (req, res) => {
   try {
@@ -233,6 +239,9 @@ export const getDashboard = async (req, res) => {
     ];
     const stageIndex = score <= 40 ? 0 : score <= 60 ? 1 : score <= 80 ? 2 : 3;
 
+    await ensureDailyLetterTable();
+    const dailyLetterStatus = await getDailyPacingStatus();
+
     res.json({
       wealthScore: Math.round(score),
       financialStage: stages[stageIndex],
@@ -248,6 +257,18 @@ export const getDashboard = async (req, res) => {
       seedRatio: Math.round(investRatio),
       essentials: plannedEssentials,
       shiftStatus,
+      dailyLetterTarget: dailyLetterStatus.dailyTarget,
+      dailyLetterCount: dailyLetterStatus.dailyLetterCount,
+      dailyLettersRemaining: dailyLetterStatus.dailyRemaining,
+      dailyTargetReached: dailyLetterStatus.targetReached,
+      dailyNotificationSent: dailyLetterStatus.notificationSent,
+      dailyLetterDate: dailyLetterStatus.date,
+      dailyRequiredPerDay: dailyLetterStatus.currentRequiredPerDay,
+      dailyShiftDay: dailyLetterStatus.shiftDay,
+      dailyShiftTotalDays: dailyLetterStatus.totalDaysInShift,
+      dailyShiftLetters: dailyLetterStatus.shiftLetters,
+      dailyShiftLettersRemaining: dailyLetterStatus.remainingShiftLetters,
+      dailyRemainingDaysInShift: dailyLetterStatus.remainingDaysInShift,
       monthlyBudget: {
         ...b,
         emergencyFund: actualEmergencyBalance,
@@ -266,29 +287,81 @@ export const updateLetters = async (req, res) => {
   const { newLetters } = req.body;
   const num = Number(newLetters);
 
+  if (!Number.isFinite(num) || num <= 0 || !Number.isInteger(num)) {
+    return res.status(400).json({ error: "Please provide a positive whole number of letters." });
+  }
+
+  const connection = await pool.getConnection();
   try {
-    const [rows] = await pool.query(
-      "SELECT translatedLetters, shiftLetters FROM MonthlyBudget WHERE id = 1",
+    await ensureDailyLetterTable();
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      "SELECT translatedLetters, shiftLetters FROM MonthlyBudget WHERE id = 1 FOR UPDATE",
     );
-    const currentTotal = rows[0].translatedLetters + num;
-    const currentShift = rows[0].shiftLetters + num;
+
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: "Budget row not found." });
+    }
+
+    const currentTotal = Number(rows[0].translatedLetters || 0) + num;
+    const currentShift = Number(rows[0].shiftLetters || 0) + num;
 
     if (currentShift > MAX_SHIFT_LETTERS) {
+      await connection.rollback();
       return res.status(400).json({
-        error: `Limit reached! You can only add ${MAX_SHIFT_LETTERS - rows[0].shiftLetters} more letters this shift.`,
+        error: `Limit reached! You can only add ${MAX_SHIFT_LETTERS - Number(rows[0].shiftLetters || 0)} more letters this shift.`,
       });
     }
 
     const newSalary = currentTotal * RATE_PER_LETTER;
 
-    await pool.query(
+    await connection.query(
       "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ? WHERE id = 1",
       [currentTotal, currentShift, newSalary],
     );
-    res.json({ success: true });
+
+    const dailyUpdate = await recordDailyLetters(connection, num);
+
+    await connection.commit();
+
+    // Push is best-effort: a missing VAPID configuration or a failed push
+    // must never undo a successfully recorded letter count.
+    if (dailyUpdate.justReached) {
+      try {
+        await sendDailyTargetReachedNotification({
+          dailyTarget: dailyUpdate.dailyTarget,
+          letterCount: dailyUpdate.dailyLetterCount,
+          date: dailyUpdate.date,
+        });
+      } catch (pushError) {
+        console.error("Daily target push error:", pushError);
+      }
+    }
+
+    res.json({
+      success: true,
+      addedLetters: num,
+      translatedLetters: currentTotal,
+      shiftLetters: currentShift,
+      dailyLetterTarget: dailyUpdate.dailyTarget,
+      dailyLetterCount: dailyUpdate.dailyLetterCount,
+      dailyLettersRemaining: dailyUpdate.dailyRemaining,
+      dailyTargetReached: dailyUpdate.targetReached,
+      dailyRequiredPerDay: dailyUpdate.currentRequiredPerDay,
+      dailyShiftDay: dailyUpdate.shiftDay,
+      dailyShiftTotalDays: dailyUpdate.totalDaysInShift,
+      dailyShiftLetters: dailyUpdate.shiftLetters,
+      dailyShiftLettersRemaining: dailyUpdate.remainingShiftLetters,
+      dailyRemainingDaysInShift: dailyUpdate.remainingDaysInShift,
+    });
   } catch (err) {
+    try { await connection.rollback(); } catch (_) {}
     console.error("Update Letters Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
