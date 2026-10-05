@@ -34,7 +34,7 @@ import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
-
+import DailyLetterNotificationSettings from "../../components/DailyLetterNotificationSettings";
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
 
@@ -273,7 +273,8 @@ export default function Overview() {
             leakageThreshold={30000}
           />
         </Box>
-
+        {/* Daily target tracking and iPhone notifications */}
+        <DailyLetterNotificationSettings />
         {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
         <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>
           <Grid item xs={12} md={6}>
