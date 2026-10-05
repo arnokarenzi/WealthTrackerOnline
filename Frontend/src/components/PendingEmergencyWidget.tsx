@@ -8,13 +8,19 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  TextField,
   Chip,
   Stack,
   useTheme,
   CircularProgress,
   Alert,
 } from "@mui/material";
-import { Shield, Work, LocalOffer } from "@mui/icons-material";
+import {
+  Shield,
+  Work,
+  LocalOffer,
+  CheckCircleOutline,
+} from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import { financeApi } from "../services/api";
 import type { PendingEmergencySnapshot } from "../types/api";
@@ -29,34 +35,40 @@ export default function PendingEmergencyWidget({
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
-  const [snapshot, setSnapshot] =
+  const [pendingEmergency, setPendingEmergency] =
     useState<PendingEmergencySnapshot | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Dialog & Form state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [overrideAmount, setOverrideAmount] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
-  const fetchPendingSnapshot = useCallback(async () => {
+  const fetchPendingEmergency = useCallback(async () => {
     try {
       setLoading(true);
       const data = await financeApi.getPendingEmergency();
-      setSnapshot(data);
+      setPendingEmergency(data);
     } catch (err) {
       console.error("Failed to load pending emergency snapshot:", err);
-      setSnapshot(null);
+      setPendingEmergency(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchPendingSnapshot();
-  }, [fetchPendingSnapshot]);
+    fetchPendingEmergency();
+  }, [fetchPendingEmergency]);
 
   const handleOpenModal = () => {
+    const target = pendingEmergency?.totalAmount ?? 0;
+    if (target <= 0) return;
+    setOverrideAmount(String(target));
     setFeedback(null);
     setIsModalOpen(true);
   };
@@ -68,40 +80,52 @@ export default function PendingEmergencyWidget({
     }
   };
 
-  const handleDepositConfirm = async () => {
-    if (!snapshot?.pending || snapshot.totalAmount <= 0) return;
+  const handleDepositConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!pendingEmergency || pendingEmergency.totalAmount <= 0) {
+      setFeedback({
+        type: "error",
+        message: "There is no pending emergency allocation to deposit.",
+      });
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       setFeedback(null);
 
       const res = await financeApi.claimPendingEmergency();
+
       setFeedback({
         type: "success",
-        message: res.message || "Emergency Reserve transfer completed!",
+        message: res.message || "Emergency allocation deposited successfully!",
       });
 
-      await fetchPendingSnapshot();
-      onDepositSuccess?.();
+      setPendingEmergency(null);
+      if (onDepositSuccess) onDepositSuccess();
 
       setTimeout(() => {
         setIsModalOpen(false);
-        setFeedback(null);
-      }, 900);
+      }, 1200);
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error
           ? err.message
-          : "Failed to transfer the pending Emergency Reserve amount.";
+          : "Failed to record emergency deposit.";
       setFeedback({ type: "error", message: errorMsg });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const totalTarget = Number(snapshot?.totalAmount || 0);
-  const salaryPortion = Number(snapshot?.salaryPortion || 0);
-  const sidePortion = Number(snapshot?.sideIncomePortion || 0);
+  const totalTarget = pendingEmergency?.totalAmount ?? 0;
+  const salaryPortion = pendingEmergency?.salaryPortion ?? 0;
+  const sidePortion = pendingEmergency?.sideIncomePortion ?? 0;
+
+  if (!loading && totalTarget <= 0) {
+    return null;
+  }
 
   return (
     <>
@@ -118,6 +142,7 @@ export default function PendingEmergencyWidget({
         }}
       >
         <Box>
+          {/* Header */}
           <Stack
             direction="row"
             alignItems="center"
@@ -131,7 +156,7 @@ export default function PendingEmergencyWidget({
               </Typography>
             </Stack>
             <Typography variant="caption" sx={{ color: colors.grey[400] }}>
-              Frozen at Reset Month
+              Last Reset Month Snapshot
             </Typography>
           </Stack>
 
@@ -139,15 +164,9 @@ export default function PendingEmergencyWidget({
             <Box display="flex" justifyContent="center" py={2}>
               <CircularProgress size={28} color="secondary" />
             </Box>
-          ) : !snapshot?.pending ? (
-            <Typography
-              variant="body1"
-              sx={{ color: colors.grey[400], py: 2, fontWeight: 600 }}
-            >
-              No pending Emergency Reserve target.
-            </Typography>
           ) : (
             <>
+              {/* Total Calculated Amount */}
               <Typography
                 variant="h2"
                 sx={{
@@ -159,15 +178,7 @@ export default function PendingEmergencyWidget({
                 {totalTarget.toLocaleString()} RWF
               </Typography>
 
-              {snapshot.monthLabel && (
-                <Typography
-                  variant="body2"
-                  sx={{ color: colors.grey[400], mb: 1.25 }}
-                >
-                  Snapshot: {snapshot.monthLabel}
-                </Typography>
-              )}
-
+              {/* Source Breakdown Badges */}
               <Stack
                 direction="row"
                 spacing={1}
@@ -201,11 +212,12 @@ export default function PendingEmergencyWidget({
           )}
         </Box>
 
+        {/* Action Button */}
         <Button
           variant="contained"
           color="secondary"
           fullWidth
-          disabled={loading || !snapshot?.pending || totalTarget <= 0}
+          disabled={loading}
           onClick={handleOpenModal}
           sx={{
             mt: 2.5,
@@ -215,10 +227,11 @@ export default function PendingEmergencyWidget({
             borderRadius: "6px",
           }}
         >
-          Migrate to Emergency Reserve
+          Deposit to Emergency Reserve
         </Button>
       </Box>
 
+      {/* Override & Confirmation Dialog */}
       <Dialog
         open={isModalOpen}
         onClose={handleCloseModal}
@@ -239,14 +252,15 @@ export default function PendingEmergencyWidget({
             gap: 1,
           }}
         >
-          <Shield /> Migrate Pending Emergency Target
+          <Shield /> Deposit to Emergency Reserve
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ color: colors.grey[200], mb: 2 }}>
-            This transfer uses the frozen amount created at Reset Month. It does
-            not recalculate from your current Allocations settings.
+            This amount was frozen when you pressed Reset Month. Changing your
+            current allocation percentages or adding new income will not change it.
           </DialogContentText>
 
+          {/* Breakdown Summary Inside Modal */}
           <Box
             sx={{
               backgroundColor: colors.primary[500],
@@ -260,17 +274,7 @@ export default function PendingEmergencyWidget({
               variant="body2"
               sx={{ fontWeight: 700, color: colors.grey[300], mb: 1 }}
             >
-              Frozen transfer amount:
-            </Typography>
-            <Typography
-              variant="h3"
-              sx={{
-                fontWeight: 800,
-                color: colors.greenAccent[400],
-                mb: 1.5,
-              }}
-            >
-              {totalTarget.toLocaleString()} RWF
+              Calculated Breakdown:
             </Typography>
             <Stack spacing={0.5}>
               <Typography variant="body2" sx={{ color: colors.grey[200] }}>
@@ -289,6 +293,23 @@ export default function PendingEmergencyWidget({
               {feedback.message}
             </Alert>
           )}
+
+          <Box
+            component="form"
+            onSubmit={handleDepositConfirm}
+            id="emergency-deposit-form"
+          >
+            <TextField
+              label="Deposit Amount (RWF)"
+              type="number"
+              variant="outlined"
+              fullWidth
+              required
+              value={overrideAmount}
+              disabled
+              helperText="This amount is frozen from the last Reset Month snapshot."
+            />
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -299,15 +320,15 @@ export default function PendingEmergencyWidget({
             Cancel
           </Button>
           <Button
-            onClick={handleDepositConfirm}
+            type="submit"
+            form="emergency-deposit-form"
             variant="contained"
             color="secondary"
+            startIcon={<CheckCircleOutline />}
             disabled={isSubmitting || totalTarget <= 0}
             sx={{ textTransform: "none", fontWeight: 700, px: 3 }}
           >
-            {isSubmitting
-              ? "Migrating..."
-              : `Migrate ${totalTarget.toLocaleString()} RWF`}
+            {isSubmitting ? "Depositing..." : "Confirm & Deposit"}
           </Button>
         </DialogActions>
       </Dialog>
