@@ -52,9 +52,9 @@ interface DashboardSummary {
   wealthScore: number;
   shiftStatus: ShiftStatusSummary;
   monthlyBudget: MonthlyBudget;
-  walletBalance: number;
-  investmentReserveBalance: number;
-  emergencyReserveBalance: number;
+  walletBalance?: number;
+  investmentReserveBalance?: number;
+  emergencyReserveBalance?: number;
 }
 
 interface DailyExpense {
