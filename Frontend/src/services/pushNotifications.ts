@@ -26,14 +26,14 @@ export const getPushSupportInfo = (): PushSupportInfo => ({
   standalone: getStandaloneState(),
 });
 
-const urlBase64ToArrayBuffer = (
-  base64String: string,
-): Uint8Array<ArrayBuffer> => {
+const urlBase64ToArrayBuffer = (base64String: string): ArrayBuffer => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-  const bytes = Array.from(rawData, (char) => char.charCodeAt(0));
-  return new Uint8Array(bytes) as Uint8Array<ArrayBuffer>;
+  const bytes = Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 };
 
 export const registerPushServiceWorker =
