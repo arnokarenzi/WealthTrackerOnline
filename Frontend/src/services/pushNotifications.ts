@@ -8,8 +8,12 @@ export interface PushSupportInfo {
 const getStandaloneState = (): boolean => {
   if (typeof window === "undefined") return false;
 
-  const mediaStandalone = window.matchMedia?.("(display-mode: standalone)").matches;
-  const iosStandalone = Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  const mediaStandalone = window.matchMedia?.(
+    "(display-mode: standalone)",
+  ).matches;
+  const iosStandalone = Boolean(
+    (navigator as Navigator & { standalone?: boolean }).standalone,
+  );
   return Boolean(mediaStandalone || iosStandalone);
 };
 
@@ -22,7 +26,9 @@ export const getPushSupportInfo = (): PushSupportInfo => ({
   standalone: getStandaloneState(),
 });
 
-const urlBase64ToUint8Array = (base64String: string): Uint8Array<ArrayBuffer> => {
+const urlBase64ToArrayBuffer = (
+  base64String: string,
+): Uint8Array<ArrayBuffer> => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
@@ -30,24 +36,30 @@ const urlBase64ToUint8Array = (base64String: string): Uint8Array<ArrayBuffer> =>
   return new Uint8Array(bytes) as Uint8Array<ArrayBuffer>;
 };
 
-export const registerPushServiceWorker = async (): Promise<ServiceWorkerRegistration> => {
-  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.href);
-  const swUrl = new URL("sw.js", baseUrl);
+export const registerPushServiceWorker =
+  async (): Promise<ServiceWorkerRegistration> => {
+    const baseUrl = new URL(import.meta.env.BASE_URL, window.location.href);
+    const swUrl = new URL("sw.js", baseUrl);
 
-  return navigator.serviceWorker.register(swUrl.href, {
-    scope: baseUrl.pathname.endsWith("/") ? baseUrl.pathname : `${baseUrl.pathname}/`,
-  });
-};
+    return navigator.serviceWorker.register(swUrl.href, {
+      scope: baseUrl.pathname.endsWith("/")
+        ? baseUrl.pathname
+        : `${baseUrl.pathname}/`,
+    });
+  };
 
-export const getExistingPushSubscription = async (): Promise<PushSubscription | null> => {
-  const registration = await registerPushServiceWorker();
-  return registration.pushManager.getSubscription();
-};
+export const getExistingPushSubscription =
+  async (): Promise<PushSubscription | null> => {
+    const registration = await registerPushServiceWorker();
+    return registration.pushManager.getSubscription();
+  };
 
 export const enableDailyLetterNotifications = async (): Promise<void> => {
   const support = getPushSupportInfo();
   if (!support.supported) {
-    throw new Error("This device/browser does not support web push notifications.");
+    throw new Error(
+      "This device/browser does not support web push notifications.",
+    );
   }
 
   if (!support.standalone) {
@@ -72,7 +84,7 @@ export const enableDailyLetterNotifications = async (): Promise<void> => {
     const { publicKey } = await financeApi.getPushPublicKey();
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: urlBase64ToArrayBuffer(publicKey),
     });
   }
 
