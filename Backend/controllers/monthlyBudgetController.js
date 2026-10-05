@@ -32,7 +32,6 @@ const getKigaliTime = () => {
   return { year, month, day, hour, minute, second, dateString, dateTimeString };
 };
 
-// Helper utility to clean up numeric values
 const n = (val) => {
   const parsed = parseFloat(val);
   return isNaN(parsed) ? 0 : parsed;
@@ -74,6 +73,7 @@ export const getBudget = async (req, res) => {
 export const updateBudget = async (req, res) => {
   const {
     salary,
+    otherIncome,
     rent,
     schoolSaving,
     phoneInternet,
@@ -98,7 +98,7 @@ export const updateBudget = async (req, res) => {
   try {
     const sql = `
       UPDATE MonthlyBudget 
-      SET salary = ?, rent = ?, schoolSaving = ?, phoneInternet = ?,
+      SET salary = ?, otherIncome = ?, rent = ?, schoolSaving = ?, phoneInternet = ?,
           electricityWater = ?, food = ?, miscellaneous = ?, medical = ?, familySupport = ?,
           emergencyFund = ?, investment = ?, balance = ?, month = ?, year = ?, translatedLetters = ?,
           recommendedEssentials = ?, recommendedEmergency = ?, recommendedInvest = ?,
@@ -107,6 +107,7 @@ export const updateBudget = async (req, res) => {
     `;
     await pool.query(sql, [
       n(salary),
+      n(otherIncome),
       n(rent),
       n(schoolSaving),
       n(phoneInternet),
@@ -147,11 +148,10 @@ export const addExtraIncome = async (req, res) => {
     await connection.beginTransaction();
 
     await connection.query(
-      "UPDATE MonthlyBudget SET balance = balance + ? WHERE id = 1",
-      [numAmount],
+      "UPDATE MonthlyBudget SET balance = balance + ?, otherIncome = otherIncome + ? WHERE id = 1",
+      [numAmount, numAmount],
     );
 
-    // Record incoming wallet ledger entry
     await connection.query(
       "INSERT INTO WalletIncome (amount, description, source_type) VALUES (?, ?, 'side_income')",
       [numAmount, incomeDesc],
@@ -159,7 +159,7 @@ export const addExtraIncome = async (req, res) => {
 
     await connection.commit();
     res.status(200).json({
-      message: "Extra income successfully added to wallet balance!",
+      message: "Extra income added! Allocations updated live.",
       amount: numAmount,
       description: incomeDesc,
     });
@@ -178,32 +178,19 @@ export const initializeProject = async (req, res) => {
     const kigali = getKigaliTime();
     await connection.beginTransaction();
 
-    // 1. Delete all expenses (both active and archived)
     await connection.query("DELETE FROM DailyExpense");
-
-    // 2. Clear all actual growth holdings / investments
     await connection.query("DELETE FROM ActualInvestments");
-
-    // 3. Reset Investment Reserve balance pool
     await connection.query(
       "UPDATE InvestmentReserve SET amount = 0 WHERE id = 1",
     );
-
-    // 4. Clear extra income history
     await connection.query("DELETE FROM WalletIncome");
-
-    // 5. Clear School Fees history
     await connection.query("DELETE FROM SchoolFees");
-
-    // 6. Reset Emergency Fund balance
+    await connection.query("DELETE FROM PendingEmergencySnapshots");
     await connection.query(
       "UPDATE EmergencyFund SET current_amount = 0 WHERE id = 1",
     );
-
-    // 7. Reset Savings Goals balances
     await connection.query("UPDATE SavingsGoals SET currentAmount = 0");
 
-    // 8. Reset MonthlyBudget active metrics & wallet balance using Kigali month & year
     await connection.query(
       `
       UPDATE MonthlyBudget 
@@ -211,7 +198,8 @@ export const initializeProject = async (req, res) => {
           phoneInternet = 0, electricityWater = 0, food = 0, miscellaneous = 0, 
           medical = 0, familySupport = 0, emergencyFund = 0, investment = 0, 
           balance = 0, month = ?, year = ?, translatedLetters = 0, 
-          shiftLetters = 0
+          shiftLetters = 0, recommendedEssentials = 0, recommendedEmergency = 0,
+          recommendedInvest = 0, recommendedDiscretionary = 0
       WHERE id = 1
     `,
       [kigali.month, kigali.year],
@@ -231,14 +219,13 @@ export const initializeProject = async (req, res) => {
   }
 };
 
-// 🔄 CLEAN RESET: Only rolls salary into PendingEarnings using Kigali timestamp.
+// 🔄 RESET MONTH: Snapshots allocations, calculates target emergency amounts from salary & side income, stages them for widget deposit, and resets active counters.
 export const resetMonth = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const kigali = getKigaliTime();
     await connection.beginTransaction();
 
-    // 1. Fetch current budget state
     const [budgetRows] = await connection.query(
       "SELECT * FROM MonthlyBudget WHERE id = 1",
     );
@@ -246,14 +233,13 @@ export const resetMonth = async (req, res) => {
     if (budgetRows.length > 0) {
       const b = budgetRows[0];
       const expectedSalary = v(b.salary);
+      const otherIncomeVal = v(b.otherIncome);
 
       const monthName = MONTH_NAMES[kigali.month - 1];
       const yearNum = kigali.year;
-
-      // Dynamic description format: "Shift Payment: August 2026"
       const shiftRolloverDesc = `Shift Payment: ${monthName} ${yearNum}`;
 
-      // Stage earned salary to pending earnings using explicit Kigali timestamp
+      // 1. Roll over salary into Pending Shift Payouts
       if (expectedSalary > 0) {
         await connection.query(
           `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
@@ -262,23 +248,79 @@ export const resetMonth = async (req, res) => {
         );
       }
 
+      // 2. Fetch emergency allocation percentage from templates
+      const [templates] = await connection.query(
+        "SELECT emergency_pct FROM AllocationTemplates WHERE user_id = 1 LIMIT 1",
+      );
+      const emergencyPct =
+        templates.length > 0 ? n(templates[0].emergency_pct) : 0;
+
+      // 3. Snapshot emergency targets derived from salary and side income before clearing counters
+      const emergencyFromSalary = (expectedSalary * emergencyPct) / 100;
+      const emergencyFromSideIncome = (otherIncomeVal * emergencyPct) / 100;
+
+      if (emergencyFromSalary > 0 || emergencyFromSideIncome > 0) {
+        // Store or update staged emergency allocation targets in a pending snapshot table or pending field
+        // This ensures the Pending Emergency Target widget retains these breakdown figures until deposited.
+        await connection
+          .query(
+            `INSERT INTO PendingEmergencySnapshots (salary_allocation, side_income_allocation, month_label, earned_date, is_deposited) 
+           VALUES (?, ?, ?, ?, FALSE)`,
+            [
+              emergencyFromSalary,
+              emergencyFromSideIncome,
+              `${monthName} ${yearNum}`,
+              kigali.dateTimeString,
+            ],
+          )
+          .catch(async () => {
+            // Fallback or handle table creation inline if not already present
+            await connection.query(`
+            CREATE TABLE IF NOT EXISTS PendingEmergencySnapshots (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              salary_allocation DECIMAL(12,2) DEFAULT 0,
+              side_income_allocation DECIMAL(12,2) DEFAULT 0,
+              month_label VARCHAR(50),
+              earned_date VARCHAR(50),
+              is_deposited BOOLEAN DEFAULT FALSE
+            )
+          `);
+            await connection.query(
+              `INSERT INTO PendingEmergencySnapshots (salary_allocation, side_income_allocation, month_label, earned_date, is_deposited) 
+             VALUES (?, ?, ?, ?, FALSE)`,
+              [
+                emergencyFromSalary,
+                emergencyFromSideIncome,
+                `${monthName} ${yearNum}`,
+                kigali.dateTimeString,
+              ],
+            );
+          });
+      }
+
       const currentRealMonth = kigali.month;
       const currentRealYear = kigali.year;
       const currentWalletBalance = v(b.balance);
 
-      // Reset active budget counters for the new shift cycle
+      // 4. Reset active working counters for the new cycle
       await connection.query(
         `UPDATE MonthlyBudget 
          SET 
-           month = ?, year = ?, salary = 0, schoolSaving = 0, 
-           emergencyFund = 0, investment = 0, balance = ?,
-           translatedLetters = 0, shiftLetters = 0
+           month = ?, 
+           year = ?, 
+           salary = 0, 
+           otherIncome = 0, 
+           schoolSaving = 0, 
+           emergencyFund = 0, 
+           investment = 0, 
+           balance = ?,
+           translatedLetters = 0, 
+           shiftLetters = 0
          WHERE id = 1`,
         [currentRealMonth, currentRealYear, currentWalletBalance],
       );
     }
 
-    // 2. Archive active expenses instead of deleting them
     await connection.query(
       "UPDATE DailyExpense SET is_archived = 1 WHERE is_archived = 0",
     );
@@ -286,10 +328,12 @@ export const resetMonth = async (req, res) => {
     await connection.commit();
 
     return res.status(200).json({
-      message: "Shift reset successful! Expenses moved to archive.",
+      message:
+        "Month reset successful! Earnings moved to Pending Buffer, allocations snapshotted into the emergency widget, and working counters reset.",
     });
   } catch (err) {
     await connection.rollback();
+    console.error("Reset Month Error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     connection.release();

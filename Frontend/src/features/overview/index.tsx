@@ -33,6 +33,7 @@ import PersonalFinancesCard from "./components/PersonalFinanceCard";
 import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
+import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
 
 import { financeApi } from "../../services/api";
 import { MonthlyBudget } from "../../types/api";
@@ -51,17 +52,9 @@ interface DashboardSummary {
   wealthScore: number;
   shiftStatus: ShiftStatusSummary;
   monthlyBudget: MonthlyBudget;
-}
-
-interface SavingsGoal {
-  id: number;
-  goalName?: string;
-  goal_name?: string;
-  targetAmount?: number;
-  target_amount?: number;
-  currentSaved?: number;
-  currentAmount?: number;
-  current_amount?: number;
+  walletBalance: number;
+  investmentReserveBalance: number;
+  emergencyReserveBalance: number;
 }
 
 interface DailyExpense {
@@ -76,7 +69,6 @@ export default function Overview() {
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(
     null,
   );
-  const [savings, setSavings] = useState<SavingsGoal[]>([]);
   const [actualExpenses, setActualExpenses] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -98,26 +90,19 @@ export default function Overview() {
 
       const secureApi = financeApi as typeof financeApi & {
         getDashboardSummary: () => Promise<DashboardSummary>;
-        getSavingsGoals: () => Promise<SavingsGoal[]>;
         getExpenses?: () => Promise<DailyExpense[]>;
       };
 
-      const [budgetPlan, dashboardSummary, savingsData, expensesData] =
-        await Promise.all([
-          secureApi.getBudgetPlan().catch(() => null),
-          secureApi.getDashboardSummary().catch(() => null),
-          secureApi.getSavingsGoals
-            ? secureApi.getSavingsGoals().catch(() => [])
-            : Promise.resolve([]),
-          secureApi.getExpenses
-            ? secureApi.getExpenses().catch(() => [])
-            : Promise.resolve([]),
-        ]);
+      const [budgetPlan, dashboardSummary, expensesData] = await Promise.all([
+        secureApi.getBudgetPlan().catch(() => null),
+        secureApi.getDashboardSummary().catch(() => null),
+        secureApi.getExpenses
+          ? secureApi.getExpenses().catch(() => [])
+          : Promise.resolve([]),
+      ]);
 
       if (budgetPlan) setLiveBudget(budgetPlan);
       if (dashboardSummary) setDashboardData(dashboardSummary);
-      setSavings(savingsData || []);
-
       const totalExp = (expensesData || []).reduce(
         (sum: number, item: DailyExpense) => sum + Number(item.amount || 0),
         0,
@@ -215,46 +200,26 @@ export default function Overview() {
       Number(dashboardData.monthlyBudget.otherIncome)
     : salary + auxiliary;
 
-  const accumulatedReserves = savings.reduce((total, goal) => {
-    const current = Number(
-      goal.currentAmount ?? goal.current_amount ?? goal.currentSaved ?? 0,
-    );
-    return total + current;
-  }, 0);
-
-  const businessCapitalGoal = savings.find(
-    (g) =>
-      (g.goalName ?? g.goal_name ?? "").toLowerCase() === "business capital",
-  );
-  const totalInvestments = Number(
-    businessCapitalGoal?.currentAmount ??
-      businessCapitalGoal?.current_amount ??
-      businessCapitalGoal?.currentSaved ??
+  // These Overview cards deliberately mirror the authoritative reserve values
+  // used by the Investments page and the current cash-on-hand balance.
+  const calculatedWallet = Number(
+    dashboardData?.walletBalance ??
+      dashboardData?.monthlyBudget?.balance ??
+      liveBudget?.balance ??
       0,
   );
 
-  const calculatedWallet = Number(
-    dashboardData?.monthlyBudget?.balance ?? liveBudget?.balance ?? 0,
-  );
+  // IMPORTANT: Overview "Savings" mirrors Investments -> Emergency exactly.
+  // The authoritative source is EmergencyFund.current_amount, exposed by
+  // the dashboard as emergencyReserveBalance. It must NOT use School Fees,
+  // SavingsGoals, or any other live allocation calculation.
+  const savingsBalance = Number(dashboardData?.emergencyReserveBalance ?? 0);
 
-  const emergencyGoal = savings.find(
-    (g) => (g.goalName ?? g.goal_name ?? "").toLowerCase() === "emergency fund",
+  // Overview "Investments" mirrors Investments -> Investment Reserve exactly.
+  const investmentReserveBalance = Number(
+    dashboardData?.investmentReserveBalance ?? 0,
   );
-
-  const liveEfPct = emergencyGoal
-    ? Math.round(
-        (Number(
-          emergencyGoal.currentSaved ??
-            emergencyGoal.currentAmount ??
-            emergencyGoal.current_amount ??
-            0,
-        ) /
-          (Number(
-            emergencyGoal.targetAmount ?? emergencyGoal.target_amount ?? 0,
-          ) || 1)) *
-          100,
-      )
-    : (dashboardData?.efCompletionPct ?? 0);
+  const liveEfPct = Number(dashboardData?.efCompletionPct ?? 0);
 
   return (
     <>
@@ -300,21 +265,32 @@ export default function Overview() {
           </Box>
         </Box>
 
+        {/* Shift Tracker Widget */}
         <Box sx={{ width: "100%", mb: 2 }}>
-          <ShiftTrackerWidget 
-            key={refreshKey} 
-            onProgressUpdate={fetchDashboardData} 
-            leakageThreshold={30000} 
-          />
-        </Box>
-
-        <Box sx={{ width: "100%", mb: 2 }}>
-          <PendingEarningsWidget
+          <ShiftTrackerWidget
             key={refreshKey}
-            onClaimSuccess={fetchDashboardData}
+            onProgressUpdate={fetchDashboardData}
+            leakageThreshold={30000}
           />
         </Box>
 
+        {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
+        <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>
+          <Grid item xs={12} md={6}>
+            <PendingEarningsWidget
+              key={refreshKey}
+              onClaimSuccess={fetchDashboardData}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <PendingEmergencyWidget
+              key={refreshKey}
+              onDepositSuccess={fetchDashboardData}
+            />
+          </Grid>
+        </Grid>
+
+        {/* Overview Finance Metric Cards */}
         <Grid container spacing={2} sx={{ width: "100%" }} key={refreshKey}>
           <Grid item xs={12} md>
             <PersonalFinancesCard
@@ -345,7 +321,7 @@ export default function Overview() {
           <Grid item xs={12} md>
             <PersonalFinancesCard
               title="Savings"
-              value={accumulatedReserves}
+              value={savingsBalance}
               icon={<SavingsIcon sx={{ color: colors.greenAccent[600] }} />}
               chartType={[3, -10, -2, 3, 4, -2, 4, 6]}
             />
@@ -353,7 +329,7 @@ export default function Overview() {
           <Grid item xs={12} md>
             <PersonalFinancesCard
               title="Investments"
-              value={totalInvestments}
+              value={investmentReserveBalance}
               icon={<AttachMoney sx={{ color: colors.greenAccent[600] }} />}
               chartType={[1, 4, 2, 5, 7, 2, 4, 6]}
             />
@@ -502,6 +478,7 @@ export default function Overview() {
         </Grid>
       </Box>
 
+      {/* Extra Income Modal */}
       <Dialog
         open={isIncomeModalOpen}
         onClose={handleCloseIncomeModal}
@@ -566,6 +543,7 @@ export default function Overview() {
         </DialogActions>
       </Dialog>
 
+      {/* Reset Modal */}
       <Dialog
         open={isResetModalOpen}
         onClose={handleCloseResetModal}

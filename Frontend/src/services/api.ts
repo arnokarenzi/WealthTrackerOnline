@@ -8,24 +8,24 @@ import {
   SavingsGoal,
   ActualInvestment,
   PendingEarningItem,
+  WalletIncomeItem,
+  AllocationTemplate,
+  AllocationRecommendations,
+  AllocationResponse,
+  ReserveFundInfo,
+  TermConfig,
+  PendingEmergencySnapshot,
 } from "../types/api";
-
-export interface WalletIncomeItem {
-  id: number;
-  amount: number;
-  description: string;
-  source_type: "shift_rollover" | "side_income";
-  created_at: string;
-}
 
 const DEV_API_URL = "http://localhost:5000/api";
 const PROD_API_URL = "https://wealthtrackeronline.onrender.com/api";
 
 const baseURL =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1")
     ? DEV_API_URL
-    : PROD_API_URL;
+    : import.meta.env.VITE_API_BASE_URL || PROD_API_URL;
 
 const apiClient = axios.create({
   baseURL,
@@ -35,6 +35,58 @@ const apiClient = axios.create({
 });
 
 export const financeApi = {
+  // --- ALLOCATION TEMPLATE & TARGET ENDPOINTS ---
+  getAllocations: async (): Promise<AllocationResponse> => {
+    const response = await apiClient.get<AllocationResponse>("/allocations");
+    return response.data;
+  },
+
+  getAllocationTemplate: async (): Promise<AllocationTemplate> => {
+    const response = await apiClient.get<AllocationTemplate>("/allocations");
+    return response.data;
+  },
+
+  updateAllocationTemplate: async (
+    payload: AllocationTemplate,
+  ): Promise<{ message: string }> => {
+    const response = await apiClient.put("/allocations", payload);
+    return response.data;
+  },
+
+  applyAllocationTemplate: async (
+    payload: AllocationTemplate,
+  ): Promise<AllocationRecommendations> => {
+    const response = await apiClient.post<AllocationRecommendations>(
+      "/allocations/apply",
+      payload,
+    );
+    return response.data;
+  },
+
+  depositEmergency: async (
+    amount: number,
+  ): Promise<{ message: string; newTotal: number; walletBalance?: number }> => {
+    const response = await apiClient.post("/emergency/deposit", { amount });
+    return response.data;
+  },
+
+  getPendingEmergency: async (): Promise<PendingEmergencySnapshot> => {
+    const response = await apiClient.get<PendingEmergencySnapshot>("/emergency/pending");
+    return response.data;
+  },
+
+  claimPendingEmergency: async (): Promise<{
+    message: string;
+    depositedAmount: number;
+    salaryPortion: number;
+    sideIncomePortion: number;
+    newTotal: number;
+    walletBalance: number;
+  }> => {
+    const response = await apiClient.post("/emergency/pending/claim");
+    return response.data;
+  },
+
   // --- DASHBOARD & BUDGET ENDPOINTS ---
   getDashboardSummary: async (): Promise<DashboardSummary> => {
     const response =
@@ -51,7 +103,7 @@ export const financeApi = {
   },
 
   updateLettersTranslated: async (
-    lettersCount: number
+    lettersCount: number,
   ): Promise<{ message: string }> => {
     const response = await apiClient.post("/monthly-budget/letters", {
       letters: lettersCount,
@@ -60,7 +112,7 @@ export const financeApi = {
   },
 
   recordTranslatedLetters: async (
-    newLetters: number | string
+    newLetters: number | string,
   ): Promise<void> => {
     await apiClient.post("/dashboard/letters", { newLetters });
   },
@@ -81,7 +133,7 @@ export const financeApi = {
 
   getWalletIncomeHistory: async (
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<WalletIncomeItem[]> => {
     let url = "/monthly-budget/income-history";
     if (startDate && endDate) {
@@ -117,10 +169,10 @@ export const financeApi = {
 
   getExpenseHistory: async (
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<Expense[]> => {
     const response = await apiClient.get<Expense[]>(
-      `/daily-expenses/history?startDate=${startDate}&endDate=${endDate}`
+      `/daily-expenses/history?startDate=${startDate}&endDate=${endDate}`,
     );
     return response.data;
   },
@@ -143,7 +195,8 @@ export const financeApi = {
   },
 
   getPendingEarnings: async (): Promise<PendingEarningItem[]> => {
-    const response = await apiClient.get("/pending-earnings");
+    const response =
+      await apiClient.get<PendingEarningItem[]>("/pending-earnings");
     return response.data;
   },
 
@@ -154,16 +207,16 @@ export const financeApi = {
   // --- INVESTMENTS & PORTFOLIOS ---
   getInvestments: async (
     month: number,
-    year: number
+    year: number,
   ): Promise<Investment[]> => {
     const response = await apiClient.get<Investment[]>(
-      `/investments?month=${month}&year=${year}`
+      `/investments?month=${month}&year=${year}`,
     );
     return response.data;
   },
 
   logInvestmentAsset: async (
-    investment: Investment
+    investment: Investment,
   ): Promise<{ message: string }> => {
     const response = await apiClient.post("/investments", investment);
     return response.data;
@@ -172,7 +225,7 @@ export const financeApi = {
   deleteInvestmentAsset: async (
     id: number,
     month: number,
-    year: number
+    year: number,
   ): Promise<void> => {
     await apiClient.delete(`/investments/${id}`, { data: { month, year } });
   },
@@ -188,19 +241,14 @@ export const financeApi = {
 
   getActualInvestments: async (): Promise<ActualInvestment[]> => {
     const response = await apiClient.get<ActualInvestment[]>(
-      "/actual-investments"
+      "/actual-investments",
     );
-    return response.data;
-  },
-
-  deleteSavingsGoal: async (id: number): Promise<{ message: string }> => {
-    const response = await apiClient.delete(`/savings-goals/${id}`);
     return response.data;
   },
 
   updateInvestmentValue: async (
     id: number,
-    currentValue: number
+    currentValue: number,
   ): Promise<void> => {
     await apiClient.put(`/actual-investments/${id}`, {
       current_value: currentValue,
@@ -212,7 +260,7 @@ export const financeApi = {
     amount: number;
     assetType?: string;
   }): Promise<{ message: string }> => {
-    const response = await apiClient.post("/actual-investments/deploy", {
+    const response = await apiClient.post("/investments/deploy", {
       asset_name: data.assetName,
       amount: data.amount,
       asset_type: data.assetType || "Bond",
@@ -228,7 +276,7 @@ export const financeApi = {
 
   updateSavingsGoal: async (
     id: number,
-    data: { amountToAdd: string }
+    data: { amountToAdd: string },
   ): Promise<{ message: string }> => {
     const response = await apiClient.put(`/savings-goals/${id}`, data);
     return response.data;
@@ -242,19 +290,34 @@ export const financeApi = {
     return response.data;
   },
 
+  deleteSavingsGoal: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/savings-goals/${id}`);
+    return response.data;
+  },
+
   // --- SPECIALIZED RESERVES ENDPOINTS ---
-  getEmergencyFund: async (): Promise<{
-    current_amount?: number;
-    currentAmount?: number;
-    target_amount?: number;
-    targetAmount?: number;
-  }> => {
-    const response = await apiClient.get("/emergency");
+  getEmergencyFund: async (): Promise<ReserveFundInfo> => {
+    const response = await apiClient.get<ReserveFundInfo>("/emergency");
     return response.data;
   },
 
   updateEmergencyFund: async (current_amount: number): Promise<void> => {
     await apiClient.put("/emergency", { current_amount });
+  },
+
+  updateEmergencyTarget: async (
+    targetAmount: number,
+    currentAmount?: number,
+  ): Promise<{ message: string }> => {
+    const response = await apiClient.put("/emergency", {
+      targetAmount,
+      target_amount: targetAmount,
+      ...(currentAmount !== undefined && {
+        currentAmount,
+        current_amount: currentAmount,
+      }),
+    });
+    return response.data;
   },
 
   getSchoolFees: async (): Promise<unknown> => {
@@ -266,14 +329,10 @@ export const financeApi = {
     await apiClient.post("/school-fees", { amountSaved });
   },
 
-  getInvestmentReserve: async (): Promise<{
-    amount?: number;
-    current_amount?: number;
-    currentAmount?: number;
-    target_amount?: number;
-    targetAmount?: number;
-  }> => {
-    const response = await apiClient.get("/investments/reserve");
+  getInvestmentReserve: async (): Promise<ReserveFundInfo> => {
+    const response = await apiClient.get<ReserveFundInfo>(
+      "/investments/reserve",
+    );
     return response.data;
   },
 
@@ -281,13 +340,27 @@ export const financeApi = {
     await apiClient.put("/investments/reserve", { amount });
   },
 
+  updateInvestmentReserveTarget: async (
+    targetAmount: number,
+    currentAmount?: number,
+  ): Promise<{ message: string }> => {
+    const response = await apiClient.put("/investments/reserve", {
+      targetAmount,
+      target_amount: targetAmount,
+      ...(currentAmount !== undefined && {
+        amount: currentAmount,
+        current_amount: currentAmount,
+        currentAmount: currentAmount,
+      }),
+    });
+    return response.data;
+  },
+
   // --- TERM CONFIGURATION ENDPOINTS ---
-  getTermConfig: async (): Promise<{
-    id: number | null;
-    term_name: string;
-    target_amount: number;
-  }> => {
-    const response = await apiClient.get("/school-fees/term-config/active");
+  getTermConfig: async (): Promise<TermConfig> => {
+    const response = await apiClient.get<TermConfig>(
+      "/school-fees/term-config/active",
+    );
     return response.data;
   },
 
@@ -295,10 +368,7 @@ export const financeApi = {
     targetAmount: number;
     termName?: string;
   }): Promise<{ message: string }> => {
-    const response = await apiClient.put(
-      "/school-fees/term-config",
-      payload
-    );
+    const response = await apiClient.put("/school-fees/term-config", payload);
     return response.data;
   },
 };

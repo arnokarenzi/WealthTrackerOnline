@@ -1,6 +1,5 @@
 import { pool } from "../models/MonthlyBudget.js";
 
-// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
 const getKigaliTime = () => {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -75,7 +74,6 @@ export const getDashboard = async (req, res) => {
        WHERE MONTH(expenseDate) = ? AND YEAR(expenseDate) = ?`,
       [currentMonth, currentYear],
     );
-    const actualSpentFromDaily = n(expensesRows[0].totalSpent);
 
     const [investmentRows] = await pool.query(
       `SELECT IFNULL(SUM(principal_invested), 0) AS totalPrincipal, 
@@ -84,12 +82,42 @@ export const getDashboard = async (req, res) => {
        WHERE month = ? AND year = ?`,
       [currentMonth, currentYear],
     );
-    const actualPrincipalInvested = n(investmentRows[0].totalPrincipal);
     const currentInvestmentValue = n(investmentRows[0].totalValue);
+
+    // Fetch actual saved balance from EmergencyFund table
+    const [efRows] = await pool.query(
+      "SELECT current_amount FROM EmergencyFund WHERE id = 1 LIMIT 1",
+    );
+    const actualEmergencyBalance =
+      efRows.length > 0 ? n(efRows[0].current_amount) : n(b.emergencyFund);
+
+    // Fetch static un-deposited emergency snapshot balances for the Pending Target Widget
+    const [[snapshotRows]] = await pool.query(
+      `SELECT 
+         IFNULL(SUM(salary_allocation), 0) AS stagedSalaryEmergency, 
+         IFNULL(SUM(side_income_allocation), 0) AS stagedSideEmergency 
+       FROM PendingEmergencySnapshots 
+       WHERE is_deposited = 0`,
+    );
+    const stagedSalaryPortion = n(snapshotRows?.stagedSalaryEmergency);
+    const stagedSidePortion = n(snapshotRows?.stagedSideEmergency);
+    const pendingEmergencyTotal =
+      Math.round((stagedSalaryPortion + stagedSidePortion) * 100) / 100;
 
     const liveSalary = n(b.translatedLetters) * RATE_PER_LETTER;
     const liveIncome = liveSalary + n(b.otherIncome);
     const liveBalance = n(b.balance);
+
+    // These balances are the same authoritative values shown in Investments.
+    const [schoolFeeRows] = await pool.query(
+      "SELECT cumulative FROM SchoolFees ORDER BY id DESC LIMIT 1",
+    );
+    const schoolFeesBalance = n(schoolFeeRows[0]?.cumulative);
+
+    const [investmentReserveRows] = await pool.query(
+      "SELECT amount FROM InvestmentReserve WHERE id = 1 LIMIT 1",
+    );
+    const investmentReserveBalance = n(investmentReserveRows[0]?.amount);
 
     await pool.query("UPDATE MonthlyBudget SET salary = ? WHERE id = 1", [
       liveSalary,
@@ -104,7 +132,6 @@ export const getDashboard = async (req, res) => {
       n(b.medical) +
       n(b.familySupport);
 
-    // Precise Kigali calendar shift computations
     const day = kigali.day;
     const lastDayOfMonth = kigali.lastDayOfMonth;
 
@@ -115,7 +142,6 @@ export const getDashboard = async (req, res) => {
     const shiftLetters = n(b.shiftLetters);
     const remainingToMax = MAX_SHIFT_LETTERS - shiftLetters;
 
-    // --- GRANULAR KIGALI TIME MATH FOR MEDALS ---
     const completedDays = Math.max(0, shiftDay - 1);
     const currentHour = kigali.hour;
     const currentMinute = kigali.minute;
@@ -182,10 +208,11 @@ export const getDashboard = async (req, res) => {
     shiftStatus.potentialLoss =
       MAX_SHIFT_LETTERS * RATE_PER_LETTER - projectedPay;
 
+    // Live dynamic emergency fund target (Allocations / Monthly Target)
     const emergencyTarget = (liveIncome * emergencyPct) / 100;
     const efCompletionPct =
       emergencyTarget > 0
-        ? Math.min((n(b.emergencyFund) / emergencyTarget) * 100, 100)
+        ? Math.min((actualEmergencyBalance / emergencyTarget) * 100, 100)
         : 100;
 
     const effectiveInvestmentVal =
@@ -209,13 +236,21 @@ export const getDashboard = async (req, res) => {
     res.json({
       wealthScore: Math.round(score),
       financialStage: stages[stageIndex],
-      emergencyTarget,
+      emergencyTarget, // Dynamic target for MonthlyBudget progress
+      pendingEmergencyTotal, // Static snapshot total for Pending Emergency Target Widget
+      walletBalance: liveBalance,
+      schoolFeesBalance,
+      investmentReserveBalance,
+      emergencyReserveBalance: actualEmergencyBalance,
+      stagedSalaryPortion, // Static salary allocation snapshot
+      stagedSidePortion, // Static side income allocation snapshot
       efCompletionPct: Math.round(efCompletionPct),
       seedRatio: Math.round(investRatio),
       essentials: plannedEssentials,
       shiftStatus,
       monthlyBudget: {
         ...b,
+        emergencyFund: actualEmergencyBalance,
         salary: liveSalary,
         balance: liveBalance,
         remainingBalance: liveBalance,
@@ -258,21 +293,21 @@ export const updateLetters = async (req, res) => {
 };
 
 export const resetShift = async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const kigali = getKigaliTime();
+    await connection.beginTransaction();
 
-    // 1. Fetch completed shift letters before reset
-    const [rows] = await pool.query(
-      "SELECT shiftLetters FROM MonthlyBudget WHERE id = 1",
+    const [rows] = await connection.query(
+      "SELECT shiftLetters, salary, otherIncome FROM MonthlyBudget WHERE id = 1",
     );
 
     if (rows.length > 0) {
       const currentShiftLetters = n(rows[0].shiftLetters);
       const earnedAmount = currentShiftLetters * RATE_PER_LETTER;
-
-      // 2. Insert into PendingEarnings with explicit Kigali timestamp
+      // 1. Move Salary into PendingEarnings
       if (earnedAmount > 0) {
-        await pool.query(
+        await connection.query(
           `INSERT INTO PendingEarnings (amount, description, is_collected, earned_date) 
            VALUES (?, ?, 0, ?)`,
           [
@@ -282,23 +317,31 @@ export const resetShift = async (req, res) => {
           ],
         );
       }
+
+      // Emergency targets are snapshotted only by Reset Month.
     }
 
-    // 3. Reset shift metrics for the next shift
-    await pool.query(`
+    // 3. Reset active budget counters for next shift
+    await connection.query(`
       UPDATE MonthlyBudget 
       SET shiftLetters = 0, 
           translatedLetters = 0, 
-          salary = 0 
+          salary = 0,
+          otherIncome = 0
       WHERE id = 1
     `);
 
+    await connection.commit();
     res.json({
-      message: "Shift reset successful! Earnings moved to Pending Buffer.",
+      message:
+        "Shift reset successful! Earnings buffered. Emergency targets are snapshotted only by Reset Month.",
     });
   } catch (err) {
+    await connection.rollback();
     console.error("Reset Shift Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
@@ -315,11 +358,13 @@ export const updateMonthlyBudget = async (req, res) => {
       return res.status(404).json({ error: "Budget row not found" });
     }
 
+    const current = { ...rows[0], ...incoming };
+
+    // Pending emergency snapshots are frozen only by Reset Month.
+
     const [templates] = await pool.query(
       "SELECT emergency_pct FROM AllocationTemplates WHERE user_id = 1 LIMIT 1",
     );
-
-    const current = { ...rows[0], ...incoming };
     const emergencyPct =
       templates.length > 0 ? n(templates[0].emergency_pct) : 0;
     const income = n(current.salary) + n(current.otherIncome);

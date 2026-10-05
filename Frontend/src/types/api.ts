@@ -44,6 +44,27 @@ export interface DashboardSummary {
   essentials: number;
   shiftStatus: ShiftStatus;
   monthlyBudget: MonthlyBudget;
+  walletBalance: number;
+  schoolFeesBalance: number;
+  investmentReserveBalance: number;
+  emergencyReserveBalance: number;
+  pendingEmergencyTotal: number;
+  stagedSalaryPortion: number;
+  stagedSidePortion: number;
+  month: number;
+  year: number;
+  totalIncomeBase: number;
+  totalExpensesLogged: number;
+  remainingBalance: number;
+  translatedLetters: number;
+  shiftLetters: number;
+  burnRates: {
+    category: string;
+    allocated: number;
+    spent: number;
+    remaining: number;
+    percentUsed: number;
+  }[];
 }
 
 export interface Expense {
@@ -70,23 +91,6 @@ export interface GratitudeLog {
   createdAt?: string;
 }
 
-export interface DashboardSummary {
-  month: number;
-  year: number;
-  totalIncomeBase: number;
-  totalExpensesLogged: number;
-  remainingBalance: number;
-  translatedLetters: number;
-  shiftLetters: number;
-  burnRates: {
-    category: string;
-    allocated: number;
-    spent: number;
-    remaining: number;
-    percentUsed: number;
-  }[];
-}
-
 export interface SavingsGoal {
   id: number;
   goalName: string;
@@ -110,4 +114,72 @@ export interface PendingEarningItem {
   description: string;
   earned_date: string;
   is_collected: boolean;
+}
+
+
+export interface PendingEmergencySnapshot {
+  pending: boolean;
+  snapshotCount: number;
+  latestSnapshotId: number | null;
+  monthLabel: string | null;
+  earnedDate: string | null;
+  salaryPortion: number;
+  sideIncomePortion: number;
+  totalAmount: number;
+}
+
+export interface WalletIncomeItem {
+  id: number;
+  amount: number;
+  description: string;
+  source_type: "shift_rollover" | "side_income";
+  created_at: string;
+}
+
+export interface AllocationTemplate {
+  id?: number;
+  emergency_pct: number;
+  essentials_pct: number;
+  invest_pct: number;
+  discretionary_pct: number;
+  salary?: number;
+  otherIncome?: number;
+  totalIncome?: number;
+}
+
+export interface AllocationRecommendations {
+  salary?: number;
+  otherIncome?: number;
+  totalIncome?: number;
+  recommendedEssentials: number;
+  recommendedEmergency: number;
+  recommendedInvest: number;
+  recommendedDiscretionary: number;
+}
+
+export interface AllocationResponse {
+  essentials_pct: number;
+  emergency_pct: number;
+  invest_pct: number;
+  discretionary_pct: number;
+  salary: number;
+  otherIncome: number;
+  totalIncome: number;
+  emergencySalaryPortion: number;
+  emergencySidePortion: number;
+  recommendedEmergency: number;
+}
+
+export interface ReserveFundInfo {
+  amount?: number;
+  current_amount?: number;
+  currentAmount?: number;
+  target_amount?: number;
+  targetAmount?: number;
+}
+
+export interface TermConfig {
+  id: number | null;
+  term_name: string;
+  target_amount: number;
 }
