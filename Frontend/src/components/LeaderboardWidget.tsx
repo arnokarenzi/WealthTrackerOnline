@@ -122,7 +122,7 @@ export default function LeaderboardWidget({ data }: Props) {
       return a.name.localeCompare(b.name);
     });
 
-    return sorted.map((entry, index, array) => {
+    return sorted.map((entry, _, array) => {
       const firstSameScore = array.findIndex(
         (candidate) => candidate.score === entry.score,
       );
