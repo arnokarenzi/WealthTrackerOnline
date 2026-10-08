@@ -175,6 +175,88 @@ export const getCurrentShiftPacing = async (queryable = pool) => {
   };
 };
 
+/*
+ * Live Gold Medal competition.
+ *
+ * The #1 dummy competitor is always one Gold-pace day ahead of the user:
+ *   leaderScore = Gold pace accumulated so far + one Gold-pace day
+ *
+ * This reproduces the requested 15-day behavior:
+ *   end of Day 1 -> 100 letters
+ *   end of Day 2 -> 150 letters
+ *   ...
+ *   end of Day 14 -> 750 letters
+ *
+ * For longer/shorter calendar shifts, the daily Gold pace is derived from
+ * 750 / actual shift length so the leader still finishes exactly 24 hours
+ * before the shift deadline.
+ *
+ * The scores are calculated from time, not stored/incremented in the database,
+ * so they remain live and deterministic after refreshes.
+ */
+export const getShiftLeaderboard = async (queryable = pool) => {
+  const pacing = await getCurrentShiftPacing(queryable);
+
+  const totalDaysInShift = Math.max(1, Number(pacing.totalDaysInShift) || 1);
+  const goldTarget = MAX_SHIFT_LETTERS;
+  const goldDailyPace = goldTarget / totalDaysInShift;
+
+  const secondsIntoToday =
+    Number(pacing.hour || 0) * 3600 +
+    Number(pacing.minute || 0) * 60 +
+    Number(pacing.second || 0);
+
+  const shiftElapsedDays = Math.min(
+    totalDaysInShift,
+    Math.max(
+      0,
+      (Number(pacing.shiftDay) - 1) +
+        secondsIntoToday / 86400,
+    ),
+  );
+
+  // One full Gold-pace day ahead of the user's Gold track.
+  const topScore = Math.min(
+    goldTarget,
+    Math.max(0, (shiftElapsedDays + 1) * goldDailyPace),
+  );
+
+  const dummyAccounts = [
+    { id: "dummy-01", name: "Daniel M.", gap: 0 },
+    { id: "dummy-02", name: "Eric K.", gap: 5 },
+    { id: "dummy-03", name: "Samuel R.", gap: 10 },
+    { id: "dummy-04", name: "Brian T.", gap: 15 },
+    { id: "dummy-05", name: "Kevin A.", gap: 20 },
+    { id: "dummy-06", name: "Patrick N.", gap: 25 },
+    { id: "dummy-07", name: "Jean P.", gap: 30 },
+    { id: "dummy-08", name: "David L.", gap: 35 },
+    { id: "dummy-09", name: "Mark E.", gap: 40 },
+    { id: "dummy-10", name: "Emmanuel B.", gap: 45 },
+  ];
+
+  const competitors = dummyAccounts.map((account) => ({
+    ...account,
+    score: Math.round(Math.max(0, topScore - account.gap)),
+  }));
+
+  return {
+    shiftDay: Number(pacing.shiftDay),
+    totalDaysInShift,
+    shiftLetters: Number(pacing.shiftLetters) || 0,
+    goldTarget,
+    goldDailyPace,
+    shiftElapsedDays,
+    topScore: Math.round(topScore),
+    serverNowMs: Date.now(),
+    competitionFinishDay: Math.max(1, totalDaysInShift - 1),
+    userScore: Math.min(
+      goldTarget,
+      Math.max(0, Number(pacing.shiftLetters) || 0),
+    ),
+    competitors,
+  };
+};
+
 const readDailyRow = async (queryable, dateString, lock = false) => {
   const sql = `
     SELECT tracking_date, letter_count, pacing_target, pacing_target_set_at,
@@ -190,7 +272,6 @@ const readDailyRow = async (queryable, dateString, lock = false) => {
 };
 
 // Called by the 08:00 Kigali scheduled job. This is the day's frozen target.
-
 export const ensureDailyTargetInitialized = async (queryable = pool) => {
   await ensureDailyLetterTable();
   const pacing = await getCurrentShiftPacing(queryable);
@@ -208,43 +289,6 @@ export const ensureDailyTargetInitialized = async (queryable = pool) => {
   return getDailyPacingStatus(queryable);
 };
 
-export const lockMorningPacingTarget = async (queryable = pool) => {
-  await ensureDailyLetterTable();
-
-  const pacing = await getCurrentShiftPacing(queryable);
-  const existing = await readDailyRow(queryable, pacing.date, false);
-
-  if (!existing) {
-    await queryable.query(
-      `INSERT INTO DailyLetterProgress
-        (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
-       VALUES (?, 0, ?, NOW(), 0)`,
-      [pacing.date, pacing.currentRequiredPerDay],
-    );
-  } else if (!Number(existing.target_reached)) {
-    // Recompute the morning target from the 08:00 state. This is deliberately
-    // different from the dynamic headline required-per-day used at 12:00/18:00.
-    await queryable.query(
-      `UPDATE DailyLetterProgress
-       SET pacing_target = ?, pacing_target_set_at = NOW(),
-           target_reached = CASE
-             WHEN letter_count >= ? AND ? > 0 THEN 1
-             ELSE target_reached
-           END
-       WHERE tracking_date = ?`,
-      [
-        pacing.currentRequiredPerDay,
-        pacing.currentRequiredPerDay,
-        pacing.currentRequiredPerDay,
-        pacing.date,
-      ],
-    );
-  }
-
-  return getDailyPacingStatus(queryable);
-};
-
-// Returns today's frozen target plus the live shift pacing figures.
 export const getDailyPacingStatus = async (queryable = pool) => {
   await ensureDailyLetterTable();
 
@@ -287,6 +331,42 @@ export const getDailyPacingStatus = async (queryable = pool) => {
     targetReachedAt: row?.target_reached_at || null,
     pacingTargetSetAt: row?.pacing_target_set_at || null,
   };
+};
+
+export const lockMorningPacingTarget = async (queryable = pool) => {
+  await ensureDailyLetterTable();
+
+  const pacing = await getCurrentShiftPacing(queryable);
+  const existing = await readDailyRow(queryable, pacing.date, false);
+
+  if (!existing) {
+    await queryable.query(
+      `INSERT INTO DailyLetterProgress
+        (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
+       VALUES (?, 0, ?, NOW(), 0)`,
+      [pacing.date, pacing.currentRequiredPerDay],
+    );
+  } else if (!Number(existing.target_reached)) {
+    // Recompute the morning target from the 08:00 state. This is deliberately
+    // different from the dynamic headline required-per-day used at 12:00/18:00.
+    await queryable.query(
+      `UPDATE DailyLetterProgress
+       SET pacing_target = ?, pacing_target_set_at = NOW(),
+           target_reached = CASE
+             WHEN letter_count >= ? AND ? > 0 THEN 1
+             ELSE target_reached
+           END
+       WHERE tracking_date = ?`,
+      [
+        pacing.currentRequiredPerDay,
+        pacing.currentRequiredPerDay,
+        pacing.currentRequiredPerDay,
+        pacing.date,
+      ],
+    );
+  }
+
+  return getDailyPacingStatus(queryable);
 };
 
 export const getDailyLetterStatus = getDailyPacingStatus;

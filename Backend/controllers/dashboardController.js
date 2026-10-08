@@ -3,6 +3,7 @@ import {
   MAX_SHIFT_LETTERS,
   ensureDailyLetterTable,
   getDailyPacingStatus,
+  getShiftLeaderboard,
   recordDailyLetters,
 } from "../services/dailyLetterService.js";
 import { sendDailyTargetReachedNotification } from "../services/pushService.js";
@@ -241,6 +242,7 @@ export const getDashboard = async (req, res) => {
 
     await ensureDailyLetterTable();
     const dailyLetterStatus = await getDailyPacingStatus();
+    const leaderboard = await getShiftLeaderboard();
 
     res.json({
       wealthScore: Math.round(score),
@@ -269,6 +271,7 @@ export const getDashboard = async (req, res) => {
       dailyShiftLetters: dailyLetterStatus.shiftLetters,
       dailyShiftLettersRemaining: dailyLetterStatus.remainingShiftLetters,
       dailyRemainingDaysInShift: dailyLetterStatus.remainingDaysInShift,
+      leaderboard,
       monthlyBudget: {
         ...b,
         emergencyFund: actualEmergencyBalance,
@@ -288,7 +291,9 @@ export const updateLetters = async (req, res) => {
   const num = Number(newLetters);
 
   if (!Number.isFinite(num) || num <= 0 || !Number.isInteger(num)) {
-    return res.status(400).json({ error: "Please provide a positive whole number of letters." });
+    return res
+      .status(400)
+      .json({ error: "Please provide a positive whole number of letters." });
   }
 
   const connection = await pool.getConnection();
@@ -357,7 +362,9 @@ export const updateLetters = async (req, res) => {
       dailyRemainingDaysInShift: dailyUpdate.remainingDaysInShift,
     });
   } catch (err) {
-    try { await connection.rollback(); } catch (_) {}
+    try {
+      await connection.rollback();
+    } catch (_) {}
     console.error("Update Letters Error:", err);
     res.status(500).json({ error: err.message });
   } finally {

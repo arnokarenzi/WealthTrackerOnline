@@ -32,29 +32,26 @@ import {
 import PersonalFinancesCard from "./components/PersonalFinanceCard";
 import { tokens } from "../../assets/theme";
 import ShiftTrackerWidget from "../../components/ShiftTrackerWidget";
+import LeaderboardWidget, {
+  LeaderboardData,
+} from "../../components/LeaderboardWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
 import { financeApi } from "../../services/api";
-import { MonthlyBudget } from "../../types/api";
+import {
+  MonthlyBudget,
+  DashboardSummary as ApiDashboardSummary,
+} from "../../types/api";
 
 interface ShiftStatusSummary {
   medal: string;
   message: string;
 }
 
-interface DashboardSummary {
-  efCompletionPct: number;
-  emergencyTarget: number;
-  essentials: number;
-  financialStage: string;
-  seedRatio: number;
-  wealthScore: number;
-  shiftStatus: ShiftStatusSummary;
-  monthlyBudget: MonthlyBudget;
-  walletBalance: number;
-  investmentReserveBalance: number;
-  emergencyReserveBalance: number;
-}
+type DashboardSummary = Omit<ApiDashboardSummary, "shiftStatus"> & {
+  leaderboard?: LeaderboardData;
+  shiftStatus?: ShiftStatusSummary;
+};
 
 interface DailyExpense {
   amount: number;
@@ -272,6 +269,14 @@ export default function Overview() {
             leakageThreshold={30000}
           />
         </Box>
+
+        {/* Live Gold Medal Leaderboard */}
+        {dashboardData?.leaderboard && (
+          <LeaderboardWidget
+            key={refreshKey}
+            data={dashboardData.leaderboard}
+          />
+        )}
 
         {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
         <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>
