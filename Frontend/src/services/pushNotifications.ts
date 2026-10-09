@@ -7,13 +7,8 @@ export interface PushSupportInfo {
 
 const getStandaloneState = (): boolean => {
   if (typeof window === "undefined") return false;
-
-  const mediaStandalone = window.matchMedia?.(
-    "(display-mode: standalone)",
-  ).matches;
-  const iosStandalone = Boolean(
-    (navigator as Navigator & { standalone?: boolean }).standalone,
-  );
+  const mediaStandalone = window.matchMedia?.("(display-mode: standalone)").matches;
+  const iosStandalone = Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
   return Boolean(mediaStandalone || iosStandalone);
 };
 
@@ -30,36 +25,47 @@ const urlBase64ToArrayBuffer = (base64String: string): ArrayBuffer => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-  const bytes = Uint8Array.from(rawData, (char) => char.charCodeAt(0));
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
+  const bytes = Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
 };
 
-export const registerPushServiceWorker =
-  async (): Promise<ServiceWorkerRegistration> => {
-    const baseUrl = new URL(import.meta.env.BASE_URL, window.location.href);
-    const swUrl = new URL("sw.js", baseUrl);
+export const registerPushServiceWorker = async (): Promise<ServiceWorkerRegistration> => {
+  if (!getPushSupportInfo().supported) {
+    throw new Error("This device/browser does not support Web Push notifications.");
+  }
 
-    return navigator.serviceWorker.register(swUrl.href, {
-      scope: baseUrl.pathname.endsWith("/")
-        ? baseUrl.pathname
-        : `${baseUrl.pathname}/`,
-    });
-  };
+  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.href);
+  const swUrl = new URL("sw.js", baseUrl);
+  const scope = baseUrl.pathname.endsWith("/") ? baseUrl.pathname : `${baseUrl.pathname}/`;
 
-export const getExistingPushSubscription =
-  async (): Promise<PushSubscription | null> => {
-    const registration = await registerPushServiceWorker();
-    return registration.pushManager.getSubscription();
-  };
+  const registration = await navigator.serviceWorker.register(swUrl.href, {
+    scope,
+    updateViaCache: "none",
+  });
+
+  // Ask the browser to check for the new service worker code after deployment.
+  // A failed update check should not discard a working registration.
+  try {
+    await registration.update();
+  } catch (error) {
+    console.warn("FinTrack service-worker update check failed:", error);
+  }
+
+  return registration;
+};
+
+export const getExistingPushSubscription = async (): Promise<PushSubscription | null> => {
+  const registration = await registerPushServiceWorker();
+  return registration.pushManager.getSubscription();
+};
 
 export const enableDailyLetterNotifications = async (): Promise<void> => {
   const support = getPushSupportInfo();
   if (!support.supported) {
-    throw new Error(
-      "This device/browser does not support web push notifications.",
-    );
+    throw new Error("This device/browser does not support Web Push notifications.");
   }
 
   if (!support.standalone) {
@@ -68,6 +74,7 @@ export const enableDailyLetterNotifications = async (): Promise<void> => {
     );
   }
 
+  // This must be invoked directly from a user tap/click.
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
     throw new Error(
@@ -78,8 +85,9 @@ export const enableDailyLetterNotifications = async (): Promise<void> => {
   }
 
   const registration = await registerPushServiceWorker();
-  let subscription = await registration.pushManager.getSubscription();
+  await navigator.serviceWorker.ready;
 
+  let subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
     const { publicKey } = await financeApi.getPushPublicKey();
     subscription = await registration.pushManager.subscribe({
@@ -88,6 +96,8 @@ export const enableDailyLetterNotifications = async (): Promise<void> => {
     });
   }
 
+  // Always upsert the current device subscription on the backend, including
+  // when the browser already had a subscription from before the deployment.
   await financeApi.savePushSubscription(subscription.toJSON());
 };
 
@@ -98,21 +108,7 @@ export const disableDailyLetterNotifications = async (): Promise<void> => {
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
 
+  // Delete the matching server record before unsubscribing this device.
   await financeApi.removePushSubscription(subscription.endpoint);
   await subscription.unsubscribe();
-};
-
-export const sendTestDailyLetterNotification = async (
-  kind: "morning" | "midday" | "evening" | "target",
-): Promise<{ title: string; body: string }> => {
-  const subscription = await getExistingPushSubscription();
-  if (!subscription) {
-    throw new Error("Notifications are not enabled on this device yet.");
-  }
-
-  const result = await financeApi.sendTestPushNotification(
-    subscription.toJSON(),
-    kind,
-  );
-  return { title: result.title, body: result.body };
 };
