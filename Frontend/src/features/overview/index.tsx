@@ -37,6 +37,7 @@ import LeaderboardWidget, {
 } from "../../components/LeaderboardWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
+import DailyLetterNotificationSettings from "../../components/DailyLetterNotificationSettings";
 import { financeApi } from "../../services/api";
 import {
   MonthlyBudget,
@@ -277,6 +278,8 @@ export default function Overview() {
             data={dashboardData.leaderboard}
           />
         )}
+        {/* Daily target tracking and iPhone notifications */}
+        <DailyLetterNotificationSettings />
 
         {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
         <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>
