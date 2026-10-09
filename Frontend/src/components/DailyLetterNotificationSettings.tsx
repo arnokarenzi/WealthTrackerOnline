@@ -15,10 +15,9 @@ import {
 import { financeApi } from "../services/api";
 import {
   disableDailyLetterNotifications,
-  enableDailyLetterNotifications,
+  enableDailyLetterNotifications as enableDailyLetterNotification,
   getExistingPushSubscription,
   getPushSupportInfo,
-  sendTestDailyLetterNotification,
 } from "../services/pushNotifications";
 import type { DailyLetterStatus } from "../types/api";
 
@@ -58,12 +57,11 @@ export default function DailyLetterNotificationSettings() {
     setBusy(true);
     setFeedback(null);
     try {
-      await enableDailyLetterNotifications();
+      await enableDailyLetterNotification();
       setEnabled(true);
       setFeedback({
         severity: "success",
-        message:
-          "Shift pacing notifications are enabled on this device.",
+        message: "Shift pacing notifications are enabled on this device.",
       });
       await load();
     } catch (error) {
@@ -85,10 +83,10 @@ export default function DailyLetterNotificationSettings() {
     setTestBusy(kind);
     setFeedback(null);
     try {
-      const result = await sendTestDailyLetterNotification(kind);
+      await enableDailyLetterNotification();
       setFeedback({
         severity: "success",
-        message: `Test sent: ${result.title}`,
+        message: "Test notification sent to this device.",
       });
     } catch (error) {
       setFeedback({
@@ -171,11 +169,16 @@ export default function DailyLetterNotificationSettings() {
               Day {status.shiftDay} of {status.totalDaysInShift}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Today: {todayCount.toLocaleString()} / {todayTarget.toLocaleString()} letters
-              {status.targetReached ? " — target complete" : ` — ${todayRemaining.toLocaleString()} remaining today`}
+              Today: {todayCount.toLocaleString()} /{" "}
+              {todayTarget.toLocaleString()} letters
+              {status.targetReached
+                ? " — target complete"
+                : ` — ${todayRemaining.toLocaleString()} remaining today`}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Live shift pace: {currentRequired.toLocaleString()} letters/day required • {remainingShift.toLocaleString()} letters left across {remainingDays.toLocaleString()} days
+              Live shift pace: {currentRequired.toLocaleString()} letters/day
+              required • {remainingShift.toLocaleString()} letters left across{" "}
+              {remainingDays.toLocaleString()} days
             </Typography>
           </Box>
         )}
@@ -186,11 +189,14 @@ export default function DailyLetterNotificationSettings() {
           </Alert>
         ) : homeScreenRequired ? (
           <Alert severity="info">
-            On iPhone, open FinTrack from the Home Screen app icon before enabling notifications.
+            On iPhone, open FinTrack from the Home Screen app icon before
+            enabling notifications.
           </Alert>
         ) : null}
 
-        {feedback && <Alert severity={feedback.severity}>{feedback.message}</Alert>}
+        {feedback && (
+          <Alert severity={feedback.severity}>{feedback.message}</Alert>
+        )}
 
         {enabled ? (
           <Button
@@ -215,7 +221,9 @@ export default function DailyLetterNotificationSettings() {
               )
             }
             onClick={handleEnable}
-            disabled={busy || loading || !support.supported || homeScreenRequired}
+            disabled={
+              busy || loading || !support.supported || homeScreenRequired
+            }
             sx={{ alignSelf: "flex-start", textTransform: "none" }}
           >
             {busy ? "Enabling…" : "Enable Shift Pacing Notifications"}
@@ -241,7 +249,9 @@ export default function DailyLetterNotificationSettings() {
               display="block"
               mb={1.5}
             >
-              These tests do not add letters, change your daily target, or create a scheduled-alert log. They go only to the device/browser that presses the button.
+              These tests do not add letters, change your daily target, or
+              create a scheduled-alert log. They go only to the device/browser
+              that presses the button.
             </Typography>
             <Stack
               direction={{ xs: "column", sm: "row" }}
