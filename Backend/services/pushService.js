@@ -178,6 +178,24 @@ const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
   return { configured: true, attempted: rows.length, sent };
 };
 
+// Authenticated diagnostic test used by POST /api/cron/test-push.
+// It sends a generic test notification to saved subscriptions only; it does
+// not update daily-letter progress or consume a scheduled pacing-log slot.
+export const sendDiagnosticPushNotification = async () => {
+  const result = await sendToSubscriptions({
+    title: "WealthTracker Notification Test",
+    body: "Your push notification connection is working.",
+    tag: `diagnostic-push-${Date.now()}`,
+    ttl: 60,
+  });
+
+  return {
+    ...result,
+    kind: "diagnostic-test",
+    sentAt: new Date().toISOString(),
+  };
+};
+
 const validateSubscription = (subscription) => {
   if (
     !subscription?.endpoint ||
