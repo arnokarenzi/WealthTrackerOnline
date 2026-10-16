@@ -168,6 +168,7 @@ export const getCurrentShiftPacing = async (queryable = pool) => {
     dateTime: kigali.dateTimeString,
     hour: kigali.hour,
     minute: kigali.minute,
+    second: kigali.second,
     shiftLetters,
     remainingShiftLetters,
     currentRequiredPerDay,
@@ -254,6 +255,57 @@ export const getShiftLeaderboard = async (queryable = pool) => {
       Math.max(0, Number(pacing.shiftLetters) || 0),
     ),
     competitors,
+  };
+};
+
+
+/**
+ * Applies the same ordering as LeaderboardWidget: higher score first, the user
+ * wins an equal-score tie against a dummy competitor, then names sort alphabetically.
+ * Returns rank details used by the backend to detect real position improvements.
+ */
+export const rankShiftLeaderboard = (leaderboard) => {
+  const goldTarget = Math.max(0, number(leaderboard?.goldTarget));
+  const entries = [
+    ...(Array.isArray(leaderboard?.competitors) ? leaderboard.competitors : []).map((competitor) => ({
+      id: String(competitor.id),
+      name: String(competitor.name || "Competitor"),
+      score: Math.min(goldTarget, Math.max(0, number(competitor.score))),
+      isUser: false,
+    })),
+    {
+      id: "user",
+      name: "You",
+      score: Math.min(goldTarget, Math.max(0, number(leaderboard?.userScore))),
+      isUser: true,
+    },
+  ];
+
+  entries.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.isUser !== b.isUser) return a.isUser ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const ranked = entries.map((entry, index, all) => ({
+    ...entry,
+    rank: all.findIndex((candidate) => candidate.score === entry.score) + 1,
+    sortedIndex: index,
+  }));
+  const user = ranked.find((entry) => entry.isUser);
+  const userIndex = ranked.findIndex((entry) => entry.isUser);
+  const nextCompetitor = userIndex > 0 ? ranked[userIndex - 1] : null;
+
+  return {
+    userRank: user?.rank ?? ranked.length,
+    userScore: user?.score ?? 0,
+    nextCompetitor: nextCompetitor
+      ? { id: nextCompetitor.id, name: nextCompetitor.name, score: nextCompetitor.score, rank: nextCompetitor.rank }
+      : null,
+    lettersToOvertake: nextCompetitor
+      ? Math.max(0, nextCompetitor.score - (user?.score ?? 0) + 1)
+      : 0,
+    totalEntries: ranked.length,
   };
 };
 

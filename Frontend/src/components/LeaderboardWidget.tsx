@@ -137,11 +137,13 @@ export default function LeaderboardWidget({ data }: Props) {
   }, [entries, live.liveTopScore]);
 
   const userEntry = ranked.find((entry) => entry.isUser);
-  const leaderEntry = ranked[0];
-  const lettersToLeader = Math.max(
-    0,
-    Number(leaderEntry?.score || 0) - Number(userEntry?.score || 0),
-  );
+  const userIndex = ranked.findIndex((entry) => entry.isUser);
+  const nextCompetitor = userIndex > 0 ? ranked[userIndex - 1] : null;
+  // A rank-improvement notification is triggered by the backend; this text
+  // shows the same next-position target while the widget is open.
+  const lettersToNextPosition = nextCompetitor
+    ? Math.max(0, Number(nextCompetitor.score || 0) - Number(userEntry?.score || 0) + 1)
+    : 0;
 
   const progressToGold = Math.min(
     100,
@@ -324,9 +326,9 @@ export default function LeaderboardWidget({ data }: Props) {
         sx={{ mt: 1.25 }}
       >
         <Typography variant="caption" sx={{ color: colors.grey[300] }}>
-          {lettersToLeader > 0
-            ? `${lettersToLeader.toLocaleString()} letters to catch the leader`
-            : "You are tied with the leader"}
+          {nextCompetitor
+            ? `${lettersToNextPosition.toLocaleString()} more letters to overtake ${nextCompetitor.name} (#${nextCompetitor.rank})`
+            : "🏆 You are number one! Keep your lead."}
         </Typography>
         <Typography variant="caption" sx={{ color: colors.grey[300] }}>
           Leader: {Math.round(live.liveTopScore).toLocaleString()} letters

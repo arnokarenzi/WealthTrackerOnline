@@ -4,9 +4,13 @@ import {
   ensureDailyLetterTable,
   getDailyPacingStatus,
   getShiftLeaderboard,
+  rankShiftLeaderboard,
   recordDailyLetters,
 } from "../services/dailyLetterService.js";
-import { sendDailyTargetReachedNotification } from "../services/pushService.js";
+import {
+  sendDailyTargetReachedNotification,
+  sendLeaderboardOvertakeNotification,
+} from "../services/pushService.js";
 
 const getKigaliTime = () => {
   const now = new Date();
@@ -310,6 +314,11 @@ export const updateLetters = async (req, res) => {
       return res.status(404).json({ error: "Budget row not found." });
     }
 
+    // Snapshot the rank before this entry. The leaderboard is calculated from
+    // the same shift state and tie-breaking rules used by the frontend widget.
+    const leaderboardBefore = await getShiftLeaderboard(connection);
+    const rankBefore = rankShiftLeaderboard(leaderboardBefore);
+
     const currentTotal = Number(rows[0].translatedLetters || 0) + num;
     const currentShift = Number(rows[0].shiftLetters || 0) + num;
 
@@ -328,8 +337,27 @@ export const updateLetters = async (req, res) => {
     );
 
     const dailyUpdate = await recordDailyLetters(connection, num);
+    const leaderboardAfter = await getShiftLeaderboard(connection);
+    const rankAfter = rankShiftLeaderboard(leaderboardAfter);
 
     await connection.commit();
+
+    // Leaderboard motivation is best-effort and only sent when the displayed
+    // rank improves. A push failure never rolls back recorded letters.
+    if (rankAfter.userRank < rankBefore.userRank) {
+      try {
+        await sendLeaderboardOvertakeNotification({
+          previousRank: rankBefore.userRank,
+          newRank: rankAfter.userRank,
+          positionsGained: rankBefore.userRank - rankAfter.userRank,
+          lettersToOvertake: rankAfter.lettersToOvertake,
+          nextCompetitorName: rankAfter.nextCompetitor?.name,
+          nextCompetitorRank: rankAfter.nextCompetitor?.rank,
+        });
+      } catch (pushError) {
+        console.error("Leaderboard overtake push error:", pushError);
+      }
+    }
 
     // Push is best-effort: a missing VAPID configuration or a failed push
     // must never undo a successfully recorded letter count.

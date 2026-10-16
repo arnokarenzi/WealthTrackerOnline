@@ -178,6 +178,50 @@ const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
   return { configured: true, attempted: rows.length, sent };
 };
 
+/** Sends a motivation push after the user's leaderboard position improves. */
+export const sendLeaderboardOvertakeNotification = async ({
+  previousRank,
+  newRank,
+  positionsGained,
+  lettersToOvertake = 0,
+  nextCompetitorName,
+  nextCompetitorRank,
+} = {}) => {
+  const previous = Number(previousRank);
+  const current = Number(newRank);
+  const gained = Math.max(1, Number(positionsGained) || (previous - current));
+  if (!Number.isFinite(previous) || !Number.isFinite(current) || current >= previous) {
+    return { configured: true, attempted: 0, sent: 0, skipped: true, reason: "rank-did-not-improve" };
+  }
+
+  const ordinal = (rank) => {
+    const n = Number(rank);
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+    return `${n}${n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th"}`;
+  };
+
+  let title;
+  let body;
+  if (current === 1) {
+    title = "🏆 You're #1 on the leaderboard!";
+    body = `Amazing work! You overtook ${gained} competitor${gained === 1 ? "" : "s"} and reached first place. Keep your lead!`;
+  } else {
+    title = `🎉 You're now in ${ordinal(current)} place!`;
+    const nextName = nextCompetitorName || `the ${ordinal(Math.max(1, current - 1))} place competitor`;
+    const count = Math.max(1, Math.ceil(Number(lettersToOvertake) || 1));
+    body = `You've overtaken ${gained} competitor${gained === 1 ? "" : "s"}! Log ${count} more letter${count === 1 ? "" : "s"} to overtake ${nextName}${nextCompetitorRank ? ` in ${ordinal(nextCompetitorRank)} place` : ""}. Keep climbing!`;
+  }
+
+  const result = await sendToSubscriptions({
+    title,
+    body,
+    tag: `leaderboard-rank-${current}-${Date.now()}`,
+    ttl: 300,
+  });
+  return { ...result, kind: "leaderboard-overtake", previousRank: previous, newRank: current, positionsGained: gained };
+};
+
 // Authenticated diagnostic test used by POST /api/cron/test-push.
 // It sends a generic test notification to saved subscriptions only; it does
 // not update daily-letter progress or consume a scheduled pacing-log slot.
