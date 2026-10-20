@@ -1,3 +1,5 @@
+import { getLocalSettingsPreferences } from "./settingsPreferences";
+
 const KIGALI_TIME_ZONE = "Africa/Kigali";
 
 type KigaliParts = {
@@ -49,8 +51,12 @@ export const getKigaliYearMonth = (instant: Date = new Date()) => {
   return { year, month };
 };
 
-const parseKigaliDisplayDate = (year: number, month: number, day: number) =>
-  `${pad(day)}/${pad(month)}/${year}`;
+const parseKigaliDisplayDate = (year: number, month: number, day: number) => {
+  const format = getLocalSettingsPreferences().dateFormat;
+  if (format === "MM/dd/yyyy") return `${pad(month)}/${pad(day)}/${year}`;
+  if (format === "yyyy-MM-dd") return `${year}-${pad(month)}-${pad(day)}`;
+  return `${pad(day)}/${pad(month)}/${year}`;
+};
 
 /**
  * Format date values for display in Kigali. SQL DATE values are returned as
@@ -86,12 +92,8 @@ export const formatKigaliDate = (
   }
 
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: KIGALI_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  const { year, month, day } = getKigaliDateParts(date);
+  return parseKigaliDisplayDate(year, month, day);
 };
 
 /** YYYY-MM-DD for a date/instant, interpreted/displayed using Kigali calendar time. */

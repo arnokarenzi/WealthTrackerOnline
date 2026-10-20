@@ -1,5 +1,69 @@
 /* FinTrack service worker: supports both legacy and declarative Web Push. */
 
+const SETTINGS_DB_NAME = "fintrack-settings";
+const SETTINGS_DB_VERSION = 1;
+const SETTINGS_STORE = "preferences";
+const NOTIFICATION_PREFERENCES_KEY = "notificationCategories";
+
+function notificationCategoryForTag(tag) {
+  if (tag.startsWith("shift-pacing-") || tag.startsWith("test-shift-pacing-")) return "shiftPacing";
+  if (tag.startsWith("daily-target-complete") || tag.startsWith("test-daily-target-complete")) return "dailyTarget";
+  if (tag.startsWith("leaderboard-rank-")) return "leaderboard";
+  return null;
+}
+
+function readNotificationPreferences() {
+  return new Promise((resolve) => {
+    let request;
+    try {
+      request = indexedDB.open(SETTINGS_DB_NAME, SETTINGS_DB_VERSION);
+    } catch (_error) {
+      resolve(null);
+      return;
+    }
+    request.onerror = () => resolve(null);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SETTINGS_STORE)) db.createObjectStore(SETTINGS_STORE);
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      let transaction;
+      try {
+        transaction = db.transaction(SETTINGS_STORE, "readonly");
+        const getRequest = transaction.objectStore(SETTINGS_STORE).get(NOTIFICATION_PREFERENCES_KEY);
+        getRequest.onsuccess = () => {
+          const value = getRequest.result;
+          db.close();
+          resolve(value && typeof value === "object" ? value : null);
+        };
+        getRequest.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch (_error) {
+        db.close();
+        resolve(null);
+      }
+    };
+  });
+}
+
+async function shouldShowPushForTag(tag) {
+  const category = notificationCategoryForTag(tag);
+  if (!category) return true;
+  const preferences = await readNotificationPreferences();
+  // Do not suppress notifications merely because IndexedDB is unavailable or
+  // this device has not saved preferences yet.
+  return !preferences || preferences[category] !== false;
+}
+
+
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -36,6 +100,8 @@ self.addEventListener("push", (event) => {
       const targetUrl =
         data.url || declared.navigate || data.navigate || self.registration.scope;
       const tag = data.type || declared.tag || data.tag || "fintrack-notification";
+
+      if (!(await shouldShowPushForTag(String(tag)))) return;
 
       const options = {
         body,

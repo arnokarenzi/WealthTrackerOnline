@@ -2,14 +2,14 @@ import { useTheme } from "@mui/material";
 import { BarDatum, ResponsiveBar } from "@nivo/bar";
 import { tokens } from "../../../assets/theme";
 
-export const SpendingBreakdownChart = ({ data }: { data: BarDatum[] }) => {
+export const SpendingBreakdownChart = ({ data, keys }: { data: BarDatum[]; keys: string[] }) => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
   return (
     <ResponsiveBar
       data={data}
-      keys={["rent", "utilities", "internet", "phone", "other"]}
+      keys={keys}
       indexBy="day"
       margin={{ top: 0, right: 20, bottom: 40, left: 50 }}
       padding={0.3}

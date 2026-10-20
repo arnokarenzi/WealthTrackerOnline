@@ -16,6 +16,17 @@ import {
   PendingEmergencySnapshotSummary,
   DailyLetterStatus,
   TermConfig,
+  SearchResult,
+  BillRecord,
+  BillPaymentRecord,
+  DebtRecord,
+  DebtPaymentRecord,
+  DebtSummary,
+  ReportsPayload,
+  NetWorthPayload,
+  SettingsPayload,
+  AppNotificationRecord,
+  ActionCenterPayload,
 } from "../types/api";
 
 const DEV_API_URL = "http://localhost:5000/api";
@@ -438,6 +449,137 @@ export const financeApi = {
     termName?: string;
   }): Promise<{ message: string }> => {
     const response = await apiClient.put("/school-fees/term-config", payload);
+    return response.data;
+  },
+
+  // --- Backend-backed search ---
+  searchRecords: async (query: string, options?: { type?: string; limit?: number; offset?: number }): Promise<{
+    query: string; type: string; limit: number; offset: number; hasMore: boolean; results: SearchResult[];
+  }> => {
+    const response = await apiClient.get("/search", {
+      params: { q: query, type: options?.type || "all", limit: options?.limit || 10, offset: options?.offset || 0 },
+    });
+    return response.data;
+  },
+
+  // --- Bills and payment history ---
+  getBills: async (options?: { status?: "all" | "paid" | "unpaid"; q?: string; limit?: number; offset?: number; includeArchived?: boolean }): Promise<BillRecord[]> => {
+    const response = await apiClient.get<BillRecord[]>("/bills", { params: options });
+    return response.data;
+  },
+  createBill: async (payload: Partial<BillRecord> & { billName: string; dueDate: string; amount: number }): Promise<{ message: string; bill: BillRecord }> => {
+    const response = await apiClient.post("/bills", payload);
+    return response.data;
+  },
+  updateBill: async (id: number, payload: Partial<BillRecord>): Promise<{ message: string; bill: BillRecord }> => {
+    const response = await apiClient.put(`/bills/${id}`, payload);
+    return response.data;
+  },
+  archiveBill: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/bills/${id}`);
+    return response.data;
+  },
+  recordBillPayment: async (id: number, payload: { requestId: string; paymentDate?: string; paymentMethod?: string; notes?: string }): Promise<{ message: string; bill: BillRecord }> => {
+    const response = await apiClient.post(`/bills/${id}/payments`, payload);
+    return response.data;
+  },
+  getBillPayments: async (id?: number): Promise<BillPaymentRecord[]> => {
+    const path = id === undefined ? "/bills/payments" : `/bills/${id}/payments`;
+    const response = await apiClient.get<BillPaymentRecord[]>(path);
+    return response.data;
+  },
+  getBillPaymentTrends: async (): Promise<{ data: Array<{ id: string; data: Array<{ x: string; y: number }> }>; hasPayments: boolean; months: Array<{ key: string; label: string }> }> => {
+    const response = await apiClient.get("/bills/trends");
+    return response.data;
+  },
+
+  // --- Debt and repayment history ---
+  getDebts: async (includeArchived = false): Promise<DebtRecord[]> => {
+    const response = await apiClient.get<DebtRecord[]>("/debts", { params: { includeArchived } });
+    return response.data;
+  },
+  createDebt: async (payload: {
+    creditor: string; debtType: string; balance: number; interestRate?: number | null;
+    minimumPayment?: number | null; dueDate?: string | null; loanTerm?: string;
+    frequency?: string; paymentMethod?: string;
+  }): Promise<{ message: string; debt: DebtRecord }> => {
+    const response = await apiClient.post("/debts", payload);
+    return response.data;
+  },
+  updateDebt: async (id: number, payload: Partial<DebtRecord>): Promise<{ message: string; debt: DebtRecord }> => {
+    const response = await apiClient.put(`/debts/${id}`, payload);
+    return response.data;
+  },
+  archiveDebt: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/debts/${id}`);
+    return response.data;
+  },
+  recordDebtPayment: async (id: number, payload: { amount: number; requestId: string; paymentDate?: string; paymentMethod?: string; reference?: string }): Promise<{ message: string; debt: DebtRecord }> => {
+    const response = await apiClient.post(`/debts/${id}/payments`, payload);
+    return response.data;
+  },
+  getDebtPayments: async (): Promise<DebtPaymentRecord[]> => {
+    const response = await apiClient.get<DebtPaymentRecord[]>("/debts/payments");
+    return response.data;
+  },
+  getDebtSummary: async (): Promise<DebtSummary> => {
+    const response = await apiClient.get<DebtSummary>("/debts/summary");
+    return response.data;
+  },
+
+  // --- Reports ---
+  getReports: async (startDate?: string, endDate?: string): Promise<ReportsPayload> => {
+    const response = await apiClient.get<ReportsPayload>("/reports", {
+      params: { ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) },
+    });
+    return response.data;
+  },
+
+  // --- Net worth ---
+  getNetWorth: async (): Promise<NetWorthPayload> => {
+    const response = await apiClient.get<NetWorthPayload>("/net-worth");
+    return response.data;
+  },
+  createNetWorthAsset: async (payload: { assetName: string; assetType: string; currentValue: number; currency?: string; acquisitionDate?: string | null; description?: string }): Promise<{ message: string; id: number }> => {
+    const response = await apiClient.post("/net-worth/assets", payload);
+    return response.data;
+  },
+  archiveNetWorthAsset: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/net-worth/assets/${id}`);
+    return response.data;
+  },
+  saveNetWorthSnapshot: async (): Promise<{ message: string; date: string; totalAssets: number; totalLiabilities: number; netWorth: number }> => {
+    const response = await apiClient.post("/net-worth/snapshots");
+    return response.data;
+  },
+
+  // --- Persisted settings ---
+  getSettings: async (): Promise<SettingsPayload> => {
+    const response = await apiClient.get<SettingsPayload>("/settings");
+    return response.data;
+  },
+  updateSettings: async (payload: Partial<SettingsPayload>): Promise<SettingsPayload> => {
+    const response = await apiClient.patch<SettingsPayload>("/settings", payload);
+    return response.data;
+  },
+
+  // --- Persisted in-app notifications, distinct from push delivery ---
+  getNotifications: async (): Promise<AppNotificationRecord[]> => {
+    const response = await apiClient.get<AppNotificationRecord[]>("/notifications");
+    return response.data;
+  },
+  markNotificationRead: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.patch(`/notifications/${id}/read`);
+    return response.data;
+  },
+  markAllNotificationsRead: async (): Promise<{ message: string; updatedCount: number }> => {
+    const response = await apiClient.post("/notifications/read-all");
+    return response.data;
+  },
+
+  // --- Action Center source data ---
+  getActionCenter: async (): Promise<ActionCenterPayload> => {
+    const response = await apiClient.get<ActionCenterPayload>("/action-center");
     return response.data;
   },
 };

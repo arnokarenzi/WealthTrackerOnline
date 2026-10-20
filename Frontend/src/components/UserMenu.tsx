@@ -16,6 +16,7 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import NotificationsActiveOutlinedIcon from "@mui/icons-material/NotificationsActiveOutlined";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { useNavigate } from "react-router-dom";
 
 import userImage from "../assets/user.png";
@@ -41,7 +42,7 @@ export default function UserMenu() {
   }, []);
 
   const handleCloseUserMenu = () => setAnchorElUser(null);
-  const openSettings = (section?: "notifications") => {
+  const openSettings = (section?: "notifications" | "data") => {
     handleCloseUserMenu();
     navigate(section ? `/settings?section=${section}` : "/settings");
   };
@@ -82,6 +83,10 @@ export default function UserMenu() {
         <MenuItem onClick={() => openSettings("notifications")}>
           <ListItemIcon><NotificationsActiveOutlinedIcon /></ListItemIcon>
           <Typography variant="body2">Notification settings</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => openSettings("data")}>
+          <ListItemIcon><FileDownloadOutlinedIcon /></ListItemIcon>
+          <Typography variant="body2">Backup & export</Typography>
         </MenuItem>
         <MenuItem onClick={() => { handleCloseUserMenu(); colorMode.toggleColorMode(); }}>
           <ListItemIcon>

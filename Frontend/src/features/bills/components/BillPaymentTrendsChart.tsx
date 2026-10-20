@@ -4,7 +4,7 @@ import { tokens } from "../../../assets/theme";
 
 interface BillPaymentTrendsChartPros {
   id: string;
-  color: string;
+  color?: string;
   data: { x: string; y: number }[];
 }
 
@@ -20,7 +20,7 @@ export const BillPaymentTrendsChart = ({ data }: { data: BillPaymentTrendsChartP
       yScale={{
         type: "linear",
         min: "auto",
-        max: 900,
+        max: "auto",
         stacked: false,
         reverse: false,
       }}

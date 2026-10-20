@@ -10,6 +10,7 @@ import {
   AttachMoneyOutlined,
   SavingsOutlined,
   PieChartOutlineOutlined, // Added icon for Allocations
+  TaskAltOutlined,
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import SidebarContext from "../context/SidebarContext";
@@ -122,6 +123,13 @@ export default function Sidebar() {
               linkTo="/"
               style={{ color: colors.grey[100] }}
               text="Overview"
+            />
+            <MenuLink
+              icon={<TaskAltOutlined />}
+              onClick={handleClick}
+              linkTo="/actions"
+              style={{ color: colors.grey[100] }}
+              text="Action Center"
             />
             <MenuLink
               icon={<DataUsageOutlined />}

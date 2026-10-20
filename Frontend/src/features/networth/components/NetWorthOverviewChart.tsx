@@ -18,8 +18,8 @@ export const NetWorthOverviewChart = ({ data }: { data: NetWorthOverviewChartPro
       xScale={{ type: "point" }}
       yScale={{
         type: "linear",
-        min: 0,
-        max: 10000,
+        min: "auto",
+        max: "auto",
         stacked: true,
         reverse: false,
       }}
@@ -30,7 +30,7 @@ export const NetWorthOverviewChart = ({ data }: { data: NetWorthOverviewChartPro
         tickSize: 5,
         tickPadding: 5,
         tickRotation: 0,
-        legend: "Months",
+        legend: "Saved snapshot date",
         legendOffset: 36,
         legendPosition: "middle",
       }}
@@ -74,7 +74,7 @@ export const NetWorthOverviewChart = ({ data }: { data: NetWorthOverviewChartPro
       pointBorderColor={{ from: "serieColor" }}
       pointLabelYOffset={-12}
       enableArea={true}
-      areaBaselineValue={70}
+      areaBaselineValue={0}
       areaOpacity={0.15}
       useMesh={true}
       legends={[]}

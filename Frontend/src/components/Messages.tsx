@@ -15,6 +15,7 @@ import {
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { tokens } from "../assets/theme";
+import { formatKigaliDate } from "../utils/kigaliTime";
 
 const NOTES_KEY = "fintrack-personal-notes-v1";
 const MAX_NOTE_LENGTH = 300;
@@ -36,6 +37,22 @@ function readNotes(): PersonalNote[] {
     );
   } catch {
     return [];
+  }
+}
+
+function formatNoteTimestamp(value: string): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return value;
+  try {
+    const date = formatKigaliDate(instant);
+    const time = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Africa/Kigali",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(instant);
+    return `${date} ${time} CAT`;
+  } catch {
+    return value;
   }
 }
 
@@ -146,7 +163,7 @@ export default function Messages() {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{note.text}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {new Date(note.createdAt).toLocaleString()}
+                  {formatNoteTimestamp(note.createdAt)}
                 </Typography>
               </Box>
               <IconButton size="small" aria-label="Delete note" onClick={() => deleteNote(note.id)}>

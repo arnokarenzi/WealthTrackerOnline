@@ -4,7 +4,7 @@ import { tokens } from "../../../assets/theme";
 
 interface TrendAnalysisChartProps {
   id: string;
-  color: string;
+  color?: string;
   data: { x: string, y: number }[];
 }
 

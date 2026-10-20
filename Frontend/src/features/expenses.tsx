@@ -538,9 +538,7 @@ export default function Expenses() {
                           }}
                         >
                           <TableCell>
-                            {item.expenseDate
-                              ? getKigaliDateStringForValue(item.expenseDate)
-                              : ""}
+                            {item.expenseDate ? formatKigaliDate(item.expenseDate) : ""}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
                             {item.description ?? ""}
@@ -738,7 +736,7 @@ export default function Expenses() {
                   historyList.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>
-                        {item.expenseDate ? item.expenseDate.split("T")[0] : ""}
+                        {item.expenseDate ? formatKigaliDate(item.expenseDate) : ""}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>
                         {item.description}

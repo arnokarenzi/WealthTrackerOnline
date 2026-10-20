@@ -241,3 +241,197 @@ export interface TermConfig {
   term_name: string;
   target_amount: number;
 }
+
+export type NotificationLevel = "critical" | "warning" | "info" | "success";
+
+export interface SearchResult {
+  id: string;
+  recordId: number;
+  type: "expense" | "bill" | "debt" | "savings-goal" | "investment";
+  title: string;
+  detail: string;
+  amount: number | null;
+  date: string | null;
+  route: string;
+}
+
+export interface BillRecord {
+  id: number;
+  billName: string;
+  vendor: string;
+  status: "Paid" | "Unpaid";
+  paymentDate: string | null;
+  dueDate: string;
+  amount: number;
+  frequency: string;
+  paymentMethod: string;
+  category: string;
+  notes: string;
+  notification: boolean;
+  autoPay: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BillPaymentRecord {
+  id: number;
+  billId: number;
+  billName: string;
+  category: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  notes: string;
+  createdAt?: string;
+}
+
+export interface DebtRecord {
+  id: number;
+  creditor: string;
+  debtType: string;
+  originalBalance: number;
+  balance: number;
+  interestRate: number | null;
+  minimumPayment: number | null;
+  dueDate: string | null;
+  remainingTerm: string;
+  loanTerm: string;
+  frequency: string;
+  paymentMethod: string;
+  status: "Active" | "Paid off";
+  progress: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DebtPaymentRecord {
+  id: number;
+  debtId: number;
+  date: string;
+  description: string;
+  type: string;
+  category: string;
+  amount: number;
+  paymentMethod: string;
+  status: string;
+  reference: string;
+  balanceBefore: number;
+  balanceAfter: number;
+  createdAt?: string;
+}
+
+export interface DebtSummary {
+  totalBalance: number;
+  totalMinimumPayments: number;
+  recordedIncomeThisMonth: number;
+  debtToIncomePercent: number | null;
+  ratioBasis: string;
+  debtToIncomeRatio: Array<{ year: string; income: number; debt: number }>;
+  debtBurdenRatio: Array<{ category: string; value: number }>;
+}
+
+export interface ReportsPayload {
+  period: { startDate: string; endDate: string };
+  definitions: Record<string, string>;
+  trendAnalysis: Array<{ id: string; data: Array<{ x: string; y: number }> }>;
+  financialOverview: Array<{ id: string; data: Array<{ x: string; y: number }> }>;
+  spendingBreakdown: Array<Record<string, string | number>>;
+  spendingBreakdownKeys: string[];
+  budgetComparison: Array<{ category: string; budget: number; actual: number }>;
+}
+
+export interface NetWorthAssetRecord {
+  id: string;
+  source: "wallet" | "emergency-fund" | "investment-reserve" | "actual-investment" | "manual";
+  sourceId?: number;
+  assetName: string;
+  assetType: string;
+  currentValue: number;
+  currency: string;
+  acquisitionDate: string | null;
+  description: string;
+}
+
+export interface NetWorthLiabilityRecord {
+  id: number;
+  name: string;
+  type: string;
+  amount: number;
+  interestRate: number | null;
+  minimumPayment: number | null;
+  dueDate: string | null;
+  loanTerm: string;
+  status: string;
+}
+
+export interface NetWorthSnapshotRecord {
+  id: number;
+  date: string;
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+}
+
+export interface NetWorthPayload {
+  assets: NetWorthAssetRecord[];
+  liabilities: NetWorthLiabilityRecord[];
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+  asOfDate: string;
+  breakdown: Record<string, number>;
+  history: NetWorthSnapshotRecord[];
+  historyIsSnapshotBased: boolean;
+  assetRules: string[];
+}
+
+export interface SettingsPayload {
+  displayName: string;
+  themeMode: "light" | "dark";
+  preferences: {
+    dateFormat: AppDateFormat;
+    budgetWarningPercent: number;
+    budgetCriticalPercent: number;
+    notifications: {
+      shiftPacing: boolean;
+      dailyTarget: boolean;
+      leaderboard: boolean;
+      budgetAlerts: boolean;
+    };
+  };
+  updatedAt?: string;
+  message?: string;
+}
+
+export interface AppNotificationRecord {
+  id: number;
+  key: string;
+  title: string;
+  message: string;
+  level: NotificationLevel;
+  route: string;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActionCenterItem {
+  id: string;
+  entityType: "bill" | "debt";
+  entityId: number;
+  title: string;
+  message: string;
+  dueDate: string;
+  severity: "critical" | "warning";
+  actionLabel: string;
+  route: string;
+}
+
+export interface ActionCenterPayload {
+  asOfDate: string;
+  dueThrough: string;
+  count: number;
+  items: ActionCenterItem[];
+}
+
+export type AppDateFormat = "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";

@@ -5,9 +5,10 @@ export interface NavigationItem {
   keywords: string[];
 }
 
-/** Searchable app pages only; this intentionally does not claim to search transactions. */
+/** Static page navigation, supplemented by backend-backed financial record search. */
 export const navigationItems: NavigationItem[] = [
   { label: "Overview", path: "/", description: "Dashboard, wallet, shift progress and financial health", keywords: ["home", "dashboard", "wallet", "shift", "health", "letters"] },
+  { label: "Action Center", path: "/actions", description: "Review upcoming and overdue bills and debt actions", keywords: ["reminders", "tasks", "overdue", "due soon", "alerts"] },
   { label: "Budget", path: "/budget", description: "Plan income, allocations and spending limits", keywords: ["plan", "income", "salary", "allocation", "limits"] },
   { label: "Expenses", path: "/expenses", description: "Record expenses and review expense history", keywords: ["spending", "transactions", "history", "cost"] },
   { label: "Bills", path: "/bills", description: "Track bills and payment status", keywords: ["payments", "utilities", "due"] },
