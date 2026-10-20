@@ -37,7 +37,6 @@ import LeaderboardWidget, {
 } from "../../components/LeaderboardWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
-import DailyLetterNotificationSettings from "../../components/DailyLetterNotificationSettings";
 import { financeApi } from "../../services/api";
 import { getKigaliDateInputValue } from "../../utils/kigaliTime";
 import {
