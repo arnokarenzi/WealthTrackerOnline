@@ -5,7 +5,7 @@ import {
   ensurePacingNotificationLogTable,
   getDailyPacingStatus,
   ensureDailyTargetInitialized,
-  lockMorningPacingTarget,
+  lockMidnightPacingTarget,
   markDailyNotificationSent,
   getKigaliTime,
 } from "./dailyLetterService.js";
@@ -500,12 +500,13 @@ export const sendShiftPacingAlertNotification = async ({
   return { ...result, pacing, title, body };
 };
 
-// Called by the Render cron process. At 08:00 the target itself is locked;
-// at 12:00 and 18:00 only the live headline/remaining numbers change.
+// Called by the Render/cron-job.org scheduler.
+// 00:00 Kigali freezes the daily target; 08:00/12:00/18:00 only deliver
+// notifications based on that snapshot. No target recalculation occurs at 08:00.
 export const runScheduledPacingNotification = async () => {
   const kigali = getKigaliTime();
 
-  if (![8, 12, 18].includes(kigali.hour)) {
+  if (![0, 8, 12, 18].includes(kigali.hour)) {
     return {
       skipped: true,
       reason: "not-a-scheduled-kigali-hour",
@@ -515,26 +516,27 @@ export const runScheduledPacingNotification = async () => {
 
   await ensureDailyLetterTable();
 
-  if (kigali.hour === 8) {
-    const status = await lockMorningPacingTarget();
-
-    if (status.targetReached) {
-      const completion = await sendDailyTargetReachedNotification({
-        dailyTarget: status.dailyTarget,
-        letterCount: status.dailyLetterCount,
-        date: status.date,
-      });
-      return { scheduledHour: 8, status, completion };
-    }
-
-    const pacing = await sendShiftPacingAlertNotification({
-      triggerHour: 8,
-      date: status.date,
-    });
-    return { scheduledHour: 8, status, pacing };
+  if (kigali.hour === 0) {
+    const status = await lockMidnightPacingTarget();
+    return {
+      scheduledHour: 0,
+      action: "midnight-target-snapshot",
+      status,
+    };
   }
 
-  const status = await getDailyPacingStatus();
+  // Safety-initialize only when the midnight job was missed. If a snapshot
+  // exists, this preserves it and never recalculates it at 08:00.
+  const status = await ensureDailyTargetInitialized();
+
+  if (kigali.hour === 8 && status.targetReached) {
+    const completion = await sendDailyTargetReachedNotification({
+      dailyTarget: status.dailyTarget,
+      letterCount: status.dailyLetterCount,
+      date: status.date,
+    });
+    return { scheduledHour: 8, status, completion };
+  }
 
   if (status.targetReached) {
     return {

@@ -1,10 +1,12 @@
 import { pool } from "../models/MonthlyBudget.js";
+import { getKigaliTime } from "../utils/kigaliTime.js";
 
 export const getAlerts = async (req, res) => {
   try {
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    const startDate = monthStart.toISOString().slice(0, 10);
+    // ExpenseDate is a DATE (calendar date), so compare against the first
+    // calendar day of the current Kigali month; don't round-trip through UTC ISO.
+    const { year, month } = getKigaliTime();
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
 
     const [expenses] = await pool.query(
       "SELECT category, SUM(amount) as spent FROM DailyExpense WHERE expenseDate >= ? GROUP BY category",
@@ -22,7 +24,6 @@ export const getAlerts = async (req, res) => {
     ];
 
     let essentialsSpent = 0;
-
     expenses.forEach((row) => {
       if (essentialsCategories.includes(row.category)) {
         essentialsSpent += Number(row.spent || 0);
@@ -32,14 +33,11 @@ export const getAlerts = async (req, res) => {
     const [[budget]] = await pool.query(
       "SELECT recommendedEssentials FROM MonthlyBudget WHERE id=1",
     );
-
     const recommended = Number(budget?.recommendedEssentials || 0);
-
-    let alerts = [];
+    const alerts = [];
 
     if (recommended > 0) {
       const pct = Math.round((essentialsSpent / recommended) * 100);
-
       if (pct >= 100) {
         alerts.push({
           level: "critical",

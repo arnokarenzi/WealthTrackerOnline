@@ -1,17 +1,16 @@
 import { useContext } from "react";
-import { Box, Divider, IconButton, useTheme } from "@mui/material";
+import { Box, Divider, IconButton, Tooltip, useTheme } from "@mui/material";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
-import InputBase from "@mui/material/InputBase";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
-import SearchIcon from "@mui/icons-material/Search";
 import MenuIcon from "@mui/icons-material/Menu";
 import SidebarContext from "../context/SidebarContext";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import Notifications from "../components/Notifications";
 import Messages from "../components/Messages";
 import UserMenu from "../components/UserMenu";
+import NavigationSearch from "../components/NavigationSearch";
+import HelpDialog from "../components/HelpDialog";
 import { ColorModeContext, tokens } from "../assets/theme";
 
 export default function Navbar() {
@@ -25,84 +24,52 @@ export default function Navbar() {
   };
 
   return (
-    <Box display="flex" justifyContent="space-between" p={2} width="100%">
-      <AppBar position="static" elevation={4}>
+    <Box display="flex" justifyContent="space-between" p={{ xs: 0.5, sm: 1, md: 2 }} width="100%">
+      <AppBar position="static" elevation={4} sx={{ minWidth: 0 }}>
         <Toolbar
+          disableGutters
           sx={{
+            px: { xs: 0.75, sm: 1.5, md: 2 },
+            gap: { xs: 0.5, sm: 1, md: 1.5 },
+            minHeight: { xs: 58, sm: 64 },
             backgroundColor: colors.primary[400],
             display: "flex",
             justifyContent: "space-between",
+            minWidth: 0,
           }}
         >
-          <IconButton
-            sx={{
-              display: {
-                xs: "block",
-                sm: "block",
-                md: "block",
-                lg: "none",
-                xl: "none",
-              },
-            }}
-            size="large"
-            edge="start"
-            aria-label="menu"
-            onClick={handleClick}
-          >
-            <MenuIcon />
-          </IconButton>
-          <IconButton
-            aria-label="Information"
-            sx={{
-              display: {
-                xs: "none",
-                sm: "none",
-                md: "none",
-                lg: "flex",
-                xl: "flex",
-              },
-            }}
-          >
-            <InfoOutlinedIcon sx={{ width: "1.5rem", height: "1.5rem" }} />
-          </IconButton>
-          <Box
-            sx={{
-              border: `2px solid ${colors.primary[500]}`,
-              borderRadius: "4px",
-              display: "flex",
-              width: "min(75%, 400px)",
-            }}
-          >
-            <InputBase sx={{ flex: 1, ml: 2 }} placeholder="Search" />
-            <IconButton type="button" sx={{ p: 1 }}>
-              <SearchIcon sx={{ color: colors.primary[500] }} />
-            </IconButton>
-          </Box>
-          <Box sx={{ display: "flex", gap: 1.5 }}>
+          <Tooltip title="Open navigation menu">
             <IconButton
-              onClick={colorMode.toggleColorMode}
-              sx={{
-                display: { xs: "none", sm: "none", md: "flex" },
-                height: "100%",
-              }}
+              sx={{ display: { xs: "flex", lg: "none" }, flexShrink: 0 }}
+              size="large"
+              edge="start"
+              aria-label="Open navigation menu"
+              onClick={handleClick}
             >
-              {theme.palette.mode === "dark" ? (
-                <DarkModeOutlinedIcon
-                  sx={{ width: "1.5rem", height: "1.5rem" }}
-                />
-              ) : (
-                <LightModeOutlinedIcon
-                  sx={{ width: "1.5rem", height: "1.5rem" }}
-                />
-              )}
+              <MenuIcon />
             </IconButton>
+          </Tooltip>
+          <Box sx={{ flex: "1 1 auto", minWidth: 0, maxWidth: 420 }}>
+            <NavigationSearch />
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0, sm: 0.5, md: 1 }, flexShrink: 0 }}>
+            <Tooltip title={theme.palette.mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+              <IconButton
+                aria-label={theme.palette.mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                onClick={colorMode.toggleColorMode}
+                sx={{ display: { xs: "none", sm: "none", md: "flex" }, height: "100%" }}
+              >
+                {theme.palette.mode === "dark" ? (
+                  <DarkModeOutlinedIcon sx={{ width: "1.5rem", height: "1.5rem" }} />
+                ) : (
+                  <LightModeOutlinedIcon sx={{ width: "1.5rem", height: "1.5rem" }} />
+                )}
+              </IconButton>
+            </Tooltip>
             <Messages />
             <Notifications />
-            <Divider
-              orientation="vertical"
-              flexItem
-              sx={{ display: { xs: "none", sm: "none", md: "flex" } }}
-            />
+            <Box sx={{ display: "flex", alignItems: "center" }}><HelpDialog /></Box>
+            <Divider orientation="vertical" flexItem sx={{ display: { xs: "none", sm: "flex" }, mx: { xs: 0, sm: 0.5 } }} />
             <UserMenu />
           </Box>
         </Toolbar>

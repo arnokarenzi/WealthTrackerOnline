@@ -83,10 +83,24 @@ export default function DailyLetterNotificationSettings() {
     setTestBusy(kind);
     setFeedback(null);
     try {
-      await enableDailyLetterNotification();
+      // Obtain a real subscription and call the backend's device-specific test
+      // endpoint. Previously this button only enabled notifications but claimed
+      // a test had been sent.
+      let subscription = await getExistingPushSubscription().catch(() => null);
+      if (!subscription) {
+        await enableDailyLetterNotification();
+        subscription = await getExistingPushSubscription();
+      }
+      if (!subscription) {
+        throw new Error("No push subscription is available for this device.");
+      }
+      const result = await financeApi.sendTestPushNotification(
+        subscription.toJSON(),
+        kind,
+      );
       setFeedback({
         severity: "success",
-        message: "Test notification sent to this device.",
+        message: `${result.title}: ${result.body} The push service accepted the test request; actual display still depends on device/browser settings.`,
       });
     } catch (error) {
       setFeedback({
@@ -139,7 +153,7 @@ export default function DailyLetterNotificationSettings() {
 
   const description = useMemo(
     () =>
-      "08:00, 12:00 and 18:00 Kigali-time pacing alerts are sent while today's target is still unfinished. The target-complete notification is sent immediately when you reach the morning target.",
+      "At 00:00 midnight Kigali time, FinTrack starts a new daily count and snapshots that day's target from the shift state at midnight. The 08:00, 12:00 and 18:00 Kigali-time alerts are reminders only; they do not recalculate the target. A target-complete notification is sent immediately when you reach it.",
     [],
   );
 

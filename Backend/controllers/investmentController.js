@@ -1,23 +1,6 @@
 import ActualInvestments from "../models/ActualInvestments.js";
 import { pool } from "../models/MonthlyBudget.js";
-
-// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
-const getKigaliDateParts = () => {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Kigali",
-    year: "numeric",
-    month: "numeric",
-  });
-  const parts = Object.fromEntries(
-    formatter.formatToParts(now).map((p) => [p.type, p.value]),
-  );
-
-  return {
-    month: parseInt(parts.month, 10),
-    year: parseInt(parts.year, 10),
-  };
-};
+import { getKigaliTime } from "../utils/kigaliTime.js";
 
 const ensureInvestmentReserveSchema = async () => {
   try {
@@ -269,7 +252,7 @@ export const deployReserve = async (req, res) => {
     );
 
     // 3. Create new holding record in ActualInvestments using Kigali month/year
-    const { month, year } = getKigaliDateParts();
+    const { month, year } = getKigaliTime();
 
     const [result] = await connection.query(
       "INSERT INTO ActualInvestments (asset_name, asset_type, principal_invested, current_value, month, year) VALUES (?, ?, ?, ?, ?, ?)",

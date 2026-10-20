@@ -1,49 +1,14 @@
 import { pool } from "../models/MonthlyBudget.js";
+import { getKigaliTime } from "../utils/kigaliTime.js";
+import {
+  calculateMidnightPacingTarget,
+  calculateTargetFromMidnightShiftTotal,
+} from "../utils/pacingTarget.js";
+export { calculateMidnightPacingTarget } from "../utils/pacingTarget.js";
 
 // Gold shift configuration used by the existing Shift Engine.
 export const MAX_SHIFT_LETTERS = 750;
 export const GOLD_PACING_ALERT_HOURS = [8, 12, 18];
-
-const TIME_ZONE = "Africa/Kigali";
-
-const getKigaliTime = () => {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hour12: false,
-  });
-
-  const parts = Object.fromEntries(
-    formatter.formatToParts(now).map((part) => [part.type, part.value]),
-  );
-
-  const year = Number(parts.year);
-  const month = Number(parts.month);
-  const day = Number(parts.day);
-  let hour = Number(parts.hour);
-  if (hour === 24) hour = 0;
-  const minute = Number(parts.minute);
-  const second = Number(parts.second);
-  const pad = (value) => String(value).padStart(2, "0");
-
-  return {
-    year,
-    month,
-    day,
-    hour,
-    minute,
-    second,
-    dateString: `${year}-${pad(month)}-${pad(day)}`,
-    dateTimeString: `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`,
-    lastDayOfMonth: new Date(year, month, 0).getDate(),
-  };
-};
 
 const number = (value) => {
   const parsed = Number(value);
@@ -323,35 +288,114 @@ const readDailyRow = async (queryable, dateString, lock = false) => {
   return rows[0] || null;
 };
 
-// Called by the 08:00 Kigali scheduled job. This is the day's frozen target.
-export const ensureDailyTargetInitialized = async (queryable = pool) => {
+/**
+ * Freeze today's pacing target from the 00:00 Kigali state. This function is
+ * called by the midnight cron. If any letters were entered after midnight,
+ * shiftLetters - today's daily count reconstructs the shift total at midnight.
+ * Re-running the cron is idempotent for a given day.
+ */
+export const lockMidnightPacingTarget = async (queryable = pool) => {
   await ensureDailyLetterTable();
   const pacing = await getCurrentShiftPacing(queryable);
   const existing = await readDailyRow(queryable, pacing.date, false);
+  const dailyCount = number(existing?.letter_count);
+  const midnightShiftLetters = Math.max(0, pacing.shiftLetters - dailyCount);
+  const target = calculateTargetFromMidnightShiftTotal(
+    midnightShiftLetters,
+    pacing.remainingDaysInShift,
+  );
 
   if (!existing) {
     await queryable.query(
       `INSERT INTO DailyLetterProgress
         (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
-       VALUES (?, 0, ?, NOW(), 0)`,
-      [pacing.date, pacing.currentRequiredPerDay],
+       VALUES (?, 0, ?, UTC_TIMESTAMP(), 0)
+       ON DUPLICATE KEY UPDATE
+         pacing_target = VALUES(pacing_target),
+         pacing_target_set_at = UTC_TIMESTAMP()`,
+      [pacing.date, target],
+    );
+  } else {
+    await queryable.query(
+      `UPDATE DailyLetterProgress
+       SET pacing_target = ?,
+           pacing_target_set_at = UTC_TIMESTAMP(),
+           target_reached = CASE
+             WHEN letter_count >= ? AND ? > 0 THEN 1
+             ELSE target_reached
+           END,
+           target_reached_at = CASE
+             WHEN letter_count >= ? AND ? > 0 THEN COALESCE(target_reached_at, UTC_TIMESTAMP())
+             ELSE target_reached_at
+           END
+       WHERE tracking_date = ?`,
+      [target, target, target, target, target, pacing.date],
     );
   }
 
   return getDailyPacingStatus(queryable);
 };
 
+/**
+ * Safety initializer used by status/notification paths. It creates a missing
+ * target using the reconstructed midnight shift total but never recalculates
+ * an already-set target. The scheduled midnight job is the authoritative lock.
+ */
+export const ensureDailyTargetInitialized = async (queryable = pool) => {
+  await ensureDailyLetterTable();
+  const pacing = await getCurrentShiftPacing(queryable);
+  const existing = await readDailyRow(queryable, pacing.date, false);
+
+  if (!existing || existing.pacing_target == null) {
+    const dailyCount = number(existing?.letter_count);
+    const target = calculateMidnightPacingTarget({
+      shiftLetters: pacing.shiftLetters,
+      dailyLetterCount: dailyCount,
+      remainingDaysInShift: pacing.remainingDaysInShift,
+    });
+
+    if (!existing) {
+      await queryable.query(
+        `INSERT INTO DailyLetterProgress
+          (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
+         VALUES (?, 0, ?, UTC_TIMESTAMP(), 0)
+         ON DUPLICATE KEY UPDATE tracking_date = VALUES(tracking_date)`,
+        [pacing.date, target],
+      );
+    } else {
+      await queryable.query(
+        `UPDATE DailyLetterProgress
+         SET pacing_target = ?, pacing_target_set_at = COALESCE(pacing_target_set_at, UTC_TIMESTAMP())
+         WHERE tracking_date = ? AND pacing_target IS NULL`,
+        [target, pacing.date],
+      );
+    }
+  }
+
+  return getDailyPacingStatus(queryable);
+};
+
+// Backwards-compatible export for older imports. It no longer locks at 08:00.
+export const lockMorningPacingTarget = lockMidnightPacingTarget;
+
 export const getDailyPacingStatus = async (queryable = pool) => {
   await ensureDailyLetterTable();
 
+  // The daily ledger key is the Africa/Kigali calendar date. It switches at
+  // 00:00 Kigali; shiftDay/shift pacing formulas below are intentionally unchanged.
   const pacing = await getCurrentShiftPacing(queryable);
   let row = await readDailyRow(queryable, pacing.date, false);
 
-  // If today's row does not exist yet, expose the current calculated target
-  // without persistently locking it. The 08:00 scheduler will lock the target.
+  // If the midnight cron has not yet initialized today's row, derive the
+  // target from the shift total at midnight (current shift total minus letters
+  // already entered today). This keeps status reads from changing the snapshot.
   const dailyTarget = row?.pacing_target != null
     ? Math.max(0, number(row.pacing_target))
-    : pacing.currentRequiredPerDay;
+    : calculateMidnightPacingTarget({
+        shiftLetters: pacing.shiftLetters,
+        dailyLetterCount: number(row?.letter_count),
+        remainingDaysInShift: pacing.remainingDaysInShift,
+      });
   const dailyCount = number(row?.letter_count);
   const dailyRemaining = Math.max(0, dailyTarget - dailyCount);
   const targetReached = dailyTarget > 0 && dailyCount >= dailyTarget;
@@ -385,42 +429,6 @@ export const getDailyPacingStatus = async (queryable = pool) => {
   };
 };
 
-export const lockMorningPacingTarget = async (queryable = pool) => {
-  await ensureDailyLetterTable();
-
-  const pacing = await getCurrentShiftPacing(queryable);
-  const existing = await readDailyRow(queryable, pacing.date, false);
-
-  if (!existing) {
-    await queryable.query(
-      `INSERT INTO DailyLetterProgress
-        (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
-       VALUES (?, 0, ?, NOW(), 0)`,
-      [pacing.date, pacing.currentRequiredPerDay],
-    );
-  } else if (!Number(existing.target_reached)) {
-    // Recompute the morning target from the 08:00 state. This is deliberately
-    // different from the dynamic headline required-per-day used at 12:00/18:00.
-    await queryable.query(
-      `UPDATE DailyLetterProgress
-       SET pacing_target = ?, pacing_target_set_at = NOW(),
-           target_reached = CASE
-             WHEN letter_count >= ? AND ? > 0 THEN 1
-             ELSE target_reached
-           END
-       WHERE tracking_date = ?`,
-      [
-        pacing.currentRequiredPerDay,
-        pacing.currentRequiredPerDay,
-        pacing.currentRequiredPerDay,
-        pacing.date,
-      ],
-    );
-  }
-
-  return getDailyPacingStatus(queryable);
-};
-
 export const getDailyLetterStatus = getDailyPacingStatus;
 
 export const recordDailyLetters = async (connection, lettersAdded) => {
@@ -434,24 +442,39 @@ export const recordDailyLetters = async (connection, lettersAdded) => {
   const pacingBefore = await getCurrentShiftPacing(connection);
   let row = await readDailyRow(connection, pacingBefore.date, true);
 
-  // A letter entry before 08:00 can still reach the target. In that case,
-  // initialize a provisional target from the state before this new entry.
+  // This controller updates MonthlyBudget.shiftLetters before calling us, so
+  // pacingBefore.shiftLetters includes this new entry. To reconstruct the
+  // midnight shift total, subtract both today's prior daily count and this entry.
   if (!row) {
+    const midnightShiftLetters = Math.max(0, pacingBefore.shiftLetters - amount);
+    const target = calculateTargetFromMidnightShiftTotal(
+      midnightShiftLetters,
+      pacingBefore.remainingDaysInShift,
+    );
     await connection.query(
       `INSERT INTO DailyLetterProgress
         (tracking_date, letter_count, pacing_target, pacing_target_set_at, target_reached)
-       VALUES (?, 0, ?, NOW(), 0)`,
-      [pacingBefore.date, pacingBefore.currentRequiredPerDay],
+       VALUES (?, 0, ?, UTC_TIMESTAMP(), 0)
+       ON DUPLICATE KEY UPDATE tracking_date = VALUES(tracking_date)`,
+      [pacingBefore.date, target],
     );
     row = await readDailyRow(connection, pacingBefore.date, true);
   }
 
   if (row.pacing_target == null) {
+    const midnightShiftLetters = Math.max(
+      0,
+      pacingBefore.shiftLetters - number(row.letter_count) - amount,
+    );
+    const target = calculateTargetFromMidnightShiftTotal(
+      midnightShiftLetters,
+      pacingBefore.remainingDaysInShift,
+    );
     await connection.query(
       `UPDATE DailyLetterProgress
-       SET pacing_target = ?, pacing_target_set_at = NOW()
-       WHERE tracking_date = ?`,
-      [pacingBefore.currentRequiredPerDay, pacingBefore.date],
+       SET pacing_target = ?, pacing_target_set_at = COALESCE(pacing_target_set_at, UTC_TIMESTAMP())
+       WHERE tracking_date = ? AND pacing_target IS NULL`,
+      [target, pacingBefore.date],
     );
   }
 

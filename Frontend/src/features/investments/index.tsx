@@ -25,6 +25,7 @@ import {
 } from "@mui/icons-material";
 import { tokens } from "../../assets/theme";
 import { financeApi } from "../../services/api";
+import { getKigaliYearMonth } from "../../utils/kigaliTime";
 
 interface CashReserveItem {
   current: number;
@@ -364,12 +365,8 @@ export default function Investments() {
     try {
       setSubmitting(true);
       if (typeof financeApi.deleteInvestmentAsset === "function") {
-        const now = new Date();
-        await financeApi.deleteInvestmentAsset(
-          assetId,
-          now.getMonth() + 1,
-          now.getFullYear(),
-        );
+        const { month, year } = getKigaliYearMonth();
+        await financeApi.deleteInvestmentAsset(assetId, month, year);
       } else if (
         typeof (
           financeApi as unknown as {

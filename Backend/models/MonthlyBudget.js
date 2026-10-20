@@ -8,11 +8,25 @@ export const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: process.env.DB_PORT || 3306,
+  // All timestamp instants are stored/read as UTC; business dates are computed in Africa/Kigali.
+  timezone: "Z",
+  dateStrings: ["DATE"],
   waitForConnections: true,
   connectionLimit: 10,
   ssl: {
     rejectUnauthorized: false,
   },
+});
+
+// Set every pooled MySQL session to UTC. TIMESTAMP/DATETIME writes that use
+// NOW() then have a stable meaning; the application converts them to Kigali
+// only for business-date calculations and user-facing display.
+pool.on("connection", (connection) => {
+  connection.query("SET SESSION time_zone = '+00:00'", (error) => {
+    if (error) {
+      console.error("Could not set MySQL session time zone to UTC:", error.message);
+    }
+  });
 });
 
 export const MonthlyBudget = {

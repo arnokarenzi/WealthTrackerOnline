@@ -1,4 +1,4 @@
-import { createContext, useState, useMemo, useCallback } from "react";
+import { createContext, useState, useMemo, useCallback, useEffect } from "react";
 import { createTheme } from "@mui/material/styles";
 
 export const tokens = (mode: "dark" | "light") => ({
@@ -278,10 +278,29 @@ export const ColorModeContext = createContext({
   toggleColorMode: () => {},
 });
 
+const THEME_MODE_KEY = "fintrack.theme-mode.v1";
+
 export const useMode = (initialMode: string) => {
-  const [mode, setMode] = useState<"dark" | "light">(
-    initialMode as "dark" | "light"
-  );
+  const [mode, setMode] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedMode = window.localStorage.getItem(THEME_MODE_KEY);
+        if (savedMode === "dark" || savedMode === "light") return savedMode;
+      } catch {
+        // Use the default if browser storage is unavailable.
+      }
+    }
+    return initialMode === "dark" ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(THEME_MODE_KEY, mode);
+    } catch {
+      // Theme switching still works for this session if storage is unavailable.
+    }
+  }, [mode]);
+
   const toggleColorMode = useCallback(() => {
     setMode((prev) => (prev === "dark" ? "light" : "dark"));
   }, []);

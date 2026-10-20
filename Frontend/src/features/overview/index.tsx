@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Box,
   Grid,
@@ -39,6 +39,7 @@ import PendingEarningsWidget from "../../components/PendingEarningsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
 import DailyLetterNotificationSettings from "../../components/DailyLetterNotificationSettings";
 import { financeApi } from "../../services/api";
+import { getKigaliDateInputValue } from "../../utils/kigaliTime";
 import {
   MonthlyBudget,
   DashboardSummary as ApiDashboardSummary,
@@ -112,8 +113,18 @@ export default function Overview() {
     }
   }, []);
 
+  const lastDashboardKigaliDate = useRef(getKigaliDateInputValue());
+
   useEffect(() => {
     fetchDashboardData();
+    const timer = window.setInterval(() => {
+      const today = getKigaliDateInputValue();
+      if (today !== lastDashboardKigaliDate.current) {
+        lastDashboardKigaliDate.current = today;
+        fetchDashboardData();
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
   }, [fetchDashboardData]);
 
   const handleExecuteProjectReset = async (): Promise<void> => {
@@ -441,6 +452,56 @@ export default function Overview() {
                         backgroundColor: "rgba(0,0,0,0.1)",
                       }}
                     />
+                  </Box>
+                  <Divider />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+                      Wealth Score Breakdown
+                    </Typography>
+                    <Stack spacing={0.8}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                          Emergency buffer
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {dashboardData.financialHealthBreakdown?.emergencyBuffer.points ?? 0}/40
+                        </Typography>
+                      </Stack>
+                      {!dashboardData.financialHealthBreakdown?.emergencyBuffer.targetConfigured && (
+                        <Typography variant="caption" sx={{ color: colors.grey[400] }}>
+                          Set a positive emergency allocation target to score this component.
+                        </Typography>
+                      )}
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                          Investments vs income
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {dashboardData.financialHealthBreakdown?.investment.points ?? 0}/30
+                        </Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                          Spending within essentials budget
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {dashboardData.financialHealthBreakdown?.budgetControl.points ?? 0}/20
+                        </Typography>
+                      </Stack>
+                      {!dashboardData.financialHealthBreakdown?.budgetControl.configured && (
+                        <Typography variant="caption" sx={{ color: colors.grey[400] }}>
+                          Enter an essentials budget to calculate spending control.
+                        </Typography>
+                      )}
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                          Positive wallet balance
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {dashboardData.financialHealthBreakdown?.wallet.points ?? 0}/10
+                        </Typography>
+                      </Stack>
+                    </Stack>
                   </Box>
                   <Divider />
                   <Stack

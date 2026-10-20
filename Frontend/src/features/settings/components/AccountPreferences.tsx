@@ -36,7 +36,7 @@ const AccountPreferences = () => {
             <Typography color={colors.grey[300]} variant="h6">
               Timezone
             </Typography>
-            <Typography variant="h5">UTC+0</Typography>
+            <Typography variant="h5">Africa/Kigali (CAT, UTC+02:00)</Typography>
           </Box>
           <Box className="settingItem btn">
             <Button color="success" endIcon={<Edit />} variant="outlined">

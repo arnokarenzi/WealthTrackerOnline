@@ -36,6 +36,18 @@ const apiClient = axios.create({
 });
 
 export const financeApi = {
+  getBudgetAlerts: async (): Promise<{
+    alerts: { level: "critical" | "warning"; message: string }[];
+    essentialsSpent: number;
+    recommended: number;
+  }> => {
+    const response = await apiClient.get<{
+      alerts: { level: "critical" | "warning"; message: string }[];
+      essentialsSpent: number;
+      recommended: number;
+    }>("/alerts");
+    return response.data;
+  },
   // --- ALLOCATION TEMPLATE & TARGET ENDPOINTS ---
   getAllocations: async (): Promise<AllocationResponse> => {
     const response = await apiClient.get<AllocationResponse>("/allocations");

@@ -15,6 +15,7 @@ import {
 import { CheckCircleOutline, PendingActions } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import { financeApi } from "../services/api";
+import { formatKigaliDate } from "../utils/kigaliTime";
 
 interface PendingItem {
   id: number;
@@ -113,7 +114,7 @@ export default function PendingEarningsWidget({
             >
               <ListItemText
                 primary={item.description}
-                secondary={`Earned on: ${new Date(item.earned_date).toLocaleDateString()}`}
+                secondary={`Earned on: ${formatKigaliDate(item.earned_date)}`}
                 primaryTypographyProps={{
                   fontWeight: 600,
                   color: colors.grey[100],

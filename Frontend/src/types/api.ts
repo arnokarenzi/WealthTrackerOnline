@@ -38,6 +38,38 @@ export interface MonthlyBudget {
 export interface DashboardSummary {
   wealthScore: number;
   financialStage: string;
+  financialHealthBreakdown?: {
+    emergencyBuffer: {
+      points: number;
+      maxPoints: number;
+      progressPct: number;
+      targetConfigured: boolean;
+      balance: number;
+      target: number;
+    };
+    investment: {
+      points: number;
+      maxPoints: number;
+      ratioPct: number;
+      capRatioPct: number;
+      incomeConfigured: boolean;
+      value: number;
+    };
+    budgetControl: {
+      points: number;
+      maxPoints: number;
+      configured: boolean;
+      spendingPct: number | null;
+      actualExpenses: number;
+      plannedEssentials: number;
+    };
+    wallet: {
+      points: number;
+      maxPoints: number;
+      positiveBalance: boolean;
+      balance: number;
+    };
+  };
   emergencyTarget: number;
   efCompletionPct: number;
   seedRatio: number;

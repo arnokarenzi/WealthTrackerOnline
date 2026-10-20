@@ -1,4 +1,6 @@
 import { pool } from "../models/MonthlyBudget.js";
+import { getKigaliTime } from "../utils/kigaliTime.js";
+import { calculateFinancialHealth } from "../utils/financialHealthScore.js";
 import {
   MAX_SHIFT_LETTERS,
   ensureDailyLetterTable,
@@ -11,48 +13,6 @@ import {
   sendDailyTargetReachedNotification,
   sendLeaderboardOvertakeNotification,
 } from "../services/pushService.js";
-
-const getKigaliTime = () => {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Kigali",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(
-    formatter.formatToParts(now).map((p) => [p.type, p.value]),
-  );
-
-  const year = parseInt(parts.year, 10);
-  const month = parseInt(parts.month, 10);
-  const day = parseInt(parts.day, 10);
-  let hour = parseInt(parts.hour, 10);
-  if (hour === 24) hour = 0;
-  const minute = parseInt(parts.minute, 10);
-  const second = parseInt(parts.second, 10);
-
-  const pad = (num) => String(num).padStart(2, "0");
-  const dateString = `${year}-${pad(month)}-${pad(day)}`;
-  const dateTimeString = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
-
-  return {
-    year,
-    month,
-    day,
-    hour,
-    minute,
-    second,
-    dateString,
-    dateTimeString,
-    lastDayOfMonth,
-  };
-};
 
 const n = (v) => {
   const x = Number(v);
@@ -221,36 +181,35 @@ export const getDashboard = async (req, res) => {
 
     // Live dynamic emergency fund target (Allocations / Monthly Target)
     const emergencyTarget = (liveIncome * emergencyPct) / 100;
-    const efCompletionPct =
-      emergencyTarget > 0
-        ? Math.min((actualEmergencyBalance / emergencyTarget) * 100, 100)
-        : 100;
-
     const effectiveInvestmentVal =
       currentInvestmentValue > 0 ? currentInvestmentValue : n(b.investment);
-    const investRatio =
-      liveIncome > 0 ? (effectiveInvestmentVal / liveIncome) * 100 : 0;
 
-    let score = 0;
-    score += (efCompletionPct / 100) * 40;
-    score += Math.min((investRatio / 20) * 30, 30);
-    if (liveBalance > 0) score += 10;
-
-    const stages = [
-      "Priority: Build Safety",
-      "Stability Phase",
-      "Investing Mode",
-      "Wealth Builder",
-    ];
-    const stageIndex = score <= 40 ? 0 : score <= 60 ? 1 : score <= 80 ? 2 : 3;
+    // Financial Health Metrics use only values already stored in the app.
+    // A missing emergency target or essentials budget earns no points for
+    // that component rather than silently awarding a perfect score.
+    const financialHealth = calculateFinancialHealth({
+      emergencyBalance: actualEmergencyBalance,
+      emergencyTarget,
+      investmentValue: effectiveInvestmentVal,
+      liveIncome,
+      walletBalance: liveBalance,
+      actualExpenses: n(expensesRows[0]?.totalSpent),
+      plannedEssentials,
+    });
+    const efCompletionPct = financialHealth.efCompletionPct;
+    const investRatio = financialHealth.investRatioPct;
+    const score = financialHealth.wealthScore;
+    const financialHealthBreakdown = financialHealth.breakdown;
+    const financialStage = financialHealth.financialStage;
 
     await ensureDailyLetterTable();
     const dailyLetterStatus = await getDailyPacingStatus();
     const leaderboard = await getShiftLeaderboard();
 
     res.json({
-      wealthScore: Math.round(score),
-      financialStage: stages[stageIndex],
+      wealthScore: score,
+      financialStage,
+      financialHealthBreakdown,
       emergencyTarget, // Dynamic target for MonthlyBudget progress
       pendingEmergencyTotal, // Static snapshot total for Pending Emergency Target Widget
       walletBalance: liveBalance,
@@ -403,7 +362,6 @@ export const updateLetters = async (req, res) => {
 export const resetShift = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const kigali = getKigaliTime();
     await connection.beginTransaction();
 
     const [rows] = await connection.query(
@@ -416,13 +374,9 @@ export const resetShift = async (req, res) => {
       // 1. Move Salary into PendingEarnings
       if (earnedAmount > 0) {
         await connection.query(
-          `INSERT INTO PendingEarnings (amount, description, is_collected, earned_date) 
-           VALUES (?, ?, 0, ?)`,
-          [
-            earnedAmount,
-            `Shift Salary (${currentShiftLetters} letters)`,
-            kigali.dateTimeString,
-          ],
+          `INSERT INTO PendingEarnings (amount, description, is_collected, earned_date)
+           VALUES (?, ?, 0, NOW())`,
+          [earnedAmount, `Shift Salary (${currentShiftLetters} letters)`],
         );
       }
 

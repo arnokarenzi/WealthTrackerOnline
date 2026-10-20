@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -35,6 +35,7 @@ import {
 import { tokens } from "../assets/theme";
 import { financeApi } from "../services/api";
 import { Expense, MonthlyBudget, WalletIncomeItem } from "../types/api";
+import { formatKigaliDate, getKigaliDateInputValue, getKigaliDateStringForValue } from "../utils/kigaliTime";
 
 interface ExpenseItem {
   id: string;
@@ -80,9 +81,9 @@ export default function Expenses() {
   const [description, setDescription] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [category, setCategory] = useState<string>("");
-  const [inputDate, setInputDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
-  );
+  const [inputDate, setInputDate] = useState<string>(getKigaliDateInputValue());
+  const lastDefaultKigaliDate = useRef(getKigaliDateInputValue());
+  const userEditedInputDate = useRef(false);
 
   // History State
   const [startDate, setStartDate] = useState<string>("");
@@ -90,6 +91,22 @@ export default function Expenses() {
   const [historyList, setHistoryList] = useState<ExpenseItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
+
+  // Keep the unedited default date aligned with Kigali midnight if this page
+  // stays open. Explicit dates selected by the user are never overwritten.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const today = getKigaliDateInputValue();
+      if (today !== lastDefaultKigaliDate.current) {
+        const previousDefault = lastDefaultKigaliDate.current;
+        lastDefaultKigaliDate.current = today;
+        if (!userEditedInputDate.current) {
+          setInputDate((current) => current === previousDefault ? today : current);
+        }
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,7 +119,7 @@ export default function Expenses() {
           description: item?.description ?? "Unspecified Transaction",
           amount: Number(item?.amount ?? 0),
           category: item?.category ?? "Miscellaneous",
-          expenseDate: item?.expenseDate ?? new Date().toISOString(),
+          expenseDate: item?.expenseDate ?? getKigaliDateInputValue(),
         }));
         setExpenseList(parsedExpenses);
 
@@ -174,6 +191,10 @@ export default function Expenses() {
       setDescription("");
       setAmount("");
       setCategory("");
+      userEditedInputDate.current = false;
+      const todayInKigali = getKigaliDateInputValue();
+      lastDefaultKigaliDate.current = todayInKigali;
+      setInputDate(todayInKigali);
     } catch (err) {
       console.error("Error committing transaction write:", err);
       setErrorMessage(
@@ -230,7 +251,7 @@ export default function Expenses() {
           description: item?.description ?? "Unspecified Transaction",
           amount: Number(item?.amount ?? 0),
           category: item?.category ?? "Miscellaneous",
-          expenseDate: item?.expenseDate ?? new Date().toISOString(),
+          expenseDate: item?.expenseDate ?? getKigaliDateInputValue(),
         }),
       );
       setHistoryList(parsed);
@@ -394,9 +415,10 @@ export default function Expenses() {
                     variant="outlined"
                     fullWidth
                     value={inputDate}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setInputDate(e.target.value)
-                    }
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      userEditedInputDate.current = true;
+                      setInputDate(e.target.value);
+                    }}
                     InputLabelProps={{ shrink: true }}
                     required
                   />
@@ -517,7 +539,7 @@ export default function Expenses() {
                         >
                           <TableCell>
                             {item.expenseDate
-                              ? item.expenseDate.split("T")[0]
+                              ? getKigaliDateStringForValue(item.expenseDate)
                               : ""}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
@@ -784,7 +806,7 @@ export default function Expenses() {
                   ];
                   const csvRows = incomeHistory.map((item) => {
                     const date = item.created_at
-                      ? item.created_at.split("T")[0]
+                      ? getKigaliDateStringForValue(item.created_at)
                       : "";
                     return `"${item.id}","${date}","${item.description.replace(/"/g, '""')}","${item.source_type}","${item.amount}"`;
                   });
@@ -928,7 +950,7 @@ export default function Expenses() {
                     >
                       <TableCell>
                         {item.created_at
-                          ? new Date(item.created_at).toLocaleDateString()
+                          ? formatKigaliDate(item.created_at)
                           : ""}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -28,6 +28,7 @@ import {
 } from "@mui/icons-material";
 import { financeApi } from "../services/api";
 import { DashboardSummary } from "../types/api";
+import { getKigaliDateInputValue, getKigaliDateParts } from "../utils/kigaliTime";
 
 interface ShiftTrackerProps {
   onProgressUpdate?: () => void;
@@ -44,6 +45,7 @@ export default function ShiftTrackerWidget({
   const [inputLetters, setInputLetters] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [now, setNow] = useState<Date>(new Date());
+  const lastKigaliDate = useRef(getKigaliDateInputValue());
   const [alertDismissed, setAlertDismissed] = useState<boolean>(false);
 
   const fetchMetrics = () => {
@@ -63,8 +65,15 @@ export default function ShiftTrackerWidget({
     fetchMetrics();
 
     const timer = setInterval(() => {
-      setNow(new Date());
-    }, 60000);
+      const instant = new Date();
+      setNow(instant);
+      const todayInKigali = getKigaliDateInputValue(instant);
+      if (todayInKigali !== lastKigaliDate.current) {
+        lastKigaliDate.current = todayInKigali;
+        // Refresh counters/shift day at Kigali midnight without changing formulas.
+        fetchMetrics();
+      }
+    }, 15000);
 
     return () => clearInterval(timer);
   }, []);
@@ -121,8 +130,7 @@ export default function ShiftTrackerWidget({
     shiftStatus.variant === "danger" ? "error" : shiftStatus.variant;
 
   const completedFullDays = Math.max(0, shiftStatus.shiftDay - 1);
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const { hour: currentHour, minute: currentMinute } = getKigaliDateParts(now);
   const fractionOfToday = (currentHour + currentMinute / 60) / 24;
   const preciseDaysElapsed = completedFullDays + fractionOfToday;
 

@@ -1,36 +1,5 @@
 import { pool } from "../models/MonthlyBudget.js";
-
-// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
-const getKigaliTime = () => {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Kigali",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(
-    formatter.formatToParts(now).map((p) => [p.type, p.value]),
-  );
-
-  const year = parseInt(parts.year, 10);
-  const month = parseInt(parts.month, 10);
-  const day = parseInt(parts.day, 10);
-  let hour = parseInt(parts.hour, 10);
-  if (hour === 24) hour = 0;
-  const minute = parseInt(parts.minute, 10);
-  const second = parseInt(parts.second, 10);
-
-  const pad = (num) => String(num).padStart(2, "0");
-  const dateString = `${year}-${pad(month)}-${pad(day)}`;
-  const dateTimeString = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
-
-  return { year, month, day, hour, minute, second, dateString, dateTimeString };
-};
+import { getKigaliTime, getKigaliDateRangeUtc } from "../utils/kigaliTime.js";
 
 const n = (val) => {
   const parsed = parseFloat(val);
@@ -242,9 +211,9 @@ export const resetMonth = async (req, res) => {
       // 1. Roll over salary into Pending Shift Payouts
       if (expectedSalary > 0) {
         await connection.query(
-          `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected) 
-           VALUES (?, ?, ?, FALSE)`,
-          [expectedSalary, shiftRolloverDesc, kigali.dateTimeString],
+          `INSERT INTO PendingEarnings (amount, description, earned_date, is_collected)
+           VALUES (?, ?, NOW(), FALSE)`,
+          [expectedSalary, shiftRolloverDesc],
         );
       }
 
@@ -347,8 +316,9 @@ export const getWalletIncomeHistory = async (req, res) => {
     let params = [];
 
     if (startDate && endDate) {
-      query += " WHERE DATE(created_at) BETWEEN ? AND ?";
-      params = [startDate, endDate];
+      const [startUtc, endUtcExclusive] = getKigaliDateRangeUtc(startDate, endDate);
+      query += " WHERE created_at >= ? AND created_at < ?";
+      params = [startUtc, endUtcExclusive];
     }
 
     query += " ORDER BY created_at DESC";

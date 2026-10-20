@@ -1,15 +1,6 @@
 import SchoolFees from "../models/SchoolFees.js";
 import { pool } from "../models/MonthlyBudget.js";
-
-// Helper utility to convert current system time to Africa/Kigali timezone (CAT / UTC+2)
-const getKigaliMonth = () => {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Kigali",
-    month: "numeric",
-  });
-  return parseInt(formatter.format(now), 10);
-};
+import { getKigaliTime } from "../utils/kigaliTime.js";
 
 const ensureSchoolFeesSchema = async () => {
   try {
@@ -76,7 +67,7 @@ export const resetSchoolFeesOnly = async (req, res) => {
 
 export const addSchoolFees = async (req, res) => {
   const { amountSaved } = req.body;
-  const currentMonth = getKigaliMonth();
+  const currentMonth = getKigaliTime().month;
 
   try {
     await ensureSchoolFeesSchema();

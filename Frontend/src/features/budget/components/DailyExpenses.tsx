@@ -19,6 +19,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddCardIcon from "@mui/icons-material/AddCard";
 import { financeApi } from "../../../services/api"; // 📑 Hits your core API definitions
 import { Expense } from "../../../types/api";
+import { getKigaliDateInputValue } from "../../../utils/kigaliTime";
 
 interface DailyExpensesProps {
   onExpenseChanged: () => void; // 🚀 Notifies the parent dashboard to update its charts and balances instantly
@@ -65,7 +66,7 @@ export default function DailyExpenses({
         description,
         amount: parseFloat(amount) || 0,
         category,
-        expenseDate: new Date().toISOString().split("T")[0],
+        expenseDate: getKigaliDateInputValue(),
       } as Expense; // 🚀 Tells TypeScript: "Treat this payload as an Expense for the API call"
 
       await financeApi.addExpense(newExpense); // 📑 Sends cleanly without a new type error
