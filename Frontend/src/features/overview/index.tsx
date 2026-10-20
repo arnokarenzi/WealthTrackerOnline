@@ -457,46 +457,92 @@ export default function Overview() {
                       Wealth Score Breakdown
                     </Typography>
                     <Stack spacing={0.8}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ color: colors.grey[300] }}
+                        >
                           Emergency buffer
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {dashboardData.financialHealthBreakdown?.emergencyBuffer.points ?? 0}/40
+                          {dashboardData.financialHealthBreakdown
+                            ?.emergencyBuffer.points ?? 0}
+                          /40
                         </Typography>
                       </Stack>
-                      {!dashboardData.financialHealthBreakdown?.emergencyBuffer.targetConfigured && (
-                        <Typography variant="caption" sx={{ color: colors.grey[400] }}>
-                          Set a positive emergency allocation target to score this component.
+                      {!dashboardData.financialHealthBreakdown?.emergencyBuffer
+                        .targetConfigured && (
+                        <Typography
+                          variant="caption"
+                          sx={{ color: colors.grey[400] }}
+                        >
+                          Set a positive emergency allocation target to score
+                          this component.
                         </Typography>
                       )}
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ color: colors.grey[300] }}
+                        >
                           Investments vs income
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {dashboardData.financialHealthBreakdown?.investment.points ?? 0}/30
+                          {dashboardData.financialHealthBreakdown?.investment
+                            .points ?? 0}
+                          /30
                         </Typography>
                       </Stack>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ color: colors.grey[300] }}
+                        >
                           Spending within essentials budget
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {dashboardData.financialHealthBreakdown?.budgetControl.points ?? 0}/20
+                          {dashboardData.financialHealthBreakdown?.budgetControl
+                            .points ?? 0}
+                          /20
                         </Typography>
                       </Stack>
-                      {!dashboardData.financialHealthBreakdown?.budgetControl.configured && (
-                        <Typography variant="caption" sx={{ color: colors.grey[400] }}>
-                          Enter an essentials budget to calculate spending control.
+                      {!dashboardData.financialHealthBreakdown?.budgetControl
+                        .configured && (
+                        <Typography
+                          variant="caption"
+                          sx={{ color: colors.grey[400] }}
+                        >
+                          Enter an essentials budget to calculate spending
+                          control.
                         </Typography>
                       )}
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" sx={{ color: colors.grey[300] }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ color: colors.grey[300] }}
+                        >
                           Positive wallet balance
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {dashboardData.financialHealthBreakdown?.wallet.points ?? 0}/10
+                          {dashboardData.financialHealthBreakdown?.wallet
+                            .points ?? 0}
+                          /10
                         </Typography>
                       </Stack>
                     </Stack>
