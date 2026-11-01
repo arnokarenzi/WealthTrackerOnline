@@ -27,6 +27,9 @@ import {
   SettingsPayload,
   AppNotificationRecord,
   ActionCenterPayload,
+  FriendPortalLettersPayload,
+  FriendPortalLetterEntry,
+  FriendPortalPendingPayout,
 } from "../types/api";
 
 const DEV_API_URL = "http://localhost:5000/api";
@@ -574,6 +577,55 @@ export const financeApi = {
   },
   markAllNotificationsRead: async (): Promise<{ message: string; updatedCount: number }> => {
     const response = await apiClient.post("/notifications/read-all");
+    return response.data;
+  },
+
+  // --- Friend portal letter tracking (separate from personal shift earnings) ---
+  getFriendPortalLetters: async (month: string): Promise<FriendPortalLettersPayload> => {
+    const response = await apiClient.get<FriendPortalLettersPayload>(
+      "/friend-portal-letters",
+      { params: { month } },
+    );
+    return response.data;
+  },
+  saveFriendPortalLetters: async (payload: {
+    workDate: string;
+    lettersCount: number;
+    notes?: string;
+  }): Promise<{ message: string; entry: FriendPortalLetterEntry }> => {
+    const response = await apiClient.post("/friend-portal-letters", payload);
+    return response.data;
+  },
+  deleteFriendPortalLetters: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/friend-portal-letters/${id}`);
+    return response.data;
+  },
+  resetFriendPortalShift: async (shiftStart: string): Promise<{
+    message: string;
+    alreadyReset: boolean;
+    shiftStart?: string;
+    shiftEnd?: string;
+    totalLetters?: number;
+    excludedLetters?: number;
+    payableLetters?: number;
+    earnings?: number;
+    amount?: number;
+    status?: string;
+  }> => {
+    const response = await apiClient.post("/friend-portal-letters/reset", { shiftStart });
+    return response.data;
+  },
+  getPendingFriendPortalPayouts: async (): Promise<FriendPortalPendingPayout[]> => {
+    const response = await apiClient.get<FriendPortalPendingPayout[]>(
+      "/friend-portal-letters/payouts/pending",
+    );
+    return response.data;
+  },
+  claimFriendPortalPayout: async (id: number): Promise<{
+    message: string;
+    collectedAmount: number;
+  }> => {
+    const response = await apiClient.post(`/friend-portal-letters/payouts/claim/${id}`);
     return response.data;
   },
 

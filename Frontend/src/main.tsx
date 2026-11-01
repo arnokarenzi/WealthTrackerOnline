@@ -21,6 +21,7 @@ import Error from "./pages/Error";
 import SavingsGoals from "./features/savings/SavingsGoals";
 import AllocationsPage from "./features/allocations";
 import ActionCenter from "./features/actioncenter";
+import FriendPortalLetters from "./features/friendportalletters";
 
 // Register the service worker early so the Home Screen app can receive
 // standards-based Web Push notifications. Permission is requested later
@@ -52,6 +53,7 @@ const router = createHashRouter(
       <Route path="/networth" element={<NetWorth />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/actions" element={<ActionCenter />} />
+      <Route path="/friend-portal-letters" element={<FriendPortalLetters />} />
     </Route>,
   ),
 );

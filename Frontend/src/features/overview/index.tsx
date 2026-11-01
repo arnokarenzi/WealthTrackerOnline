@@ -36,6 +36,7 @@ import LeaderboardWidget, {
   LeaderboardData,
 } from "../../components/LeaderboardWidget";
 import PendingEarningsWidget from "../../components/PendingEarningsWidget";
+import PendingFriendPortalPayoutsWidget from "../../components/PendingFriendPortalPayoutsWidget";
 import PendingEmergencyWidget from "../../components/PendingEmergencyWidget";
 import { financeApi } from "../../services/api";
 import { getKigaliDateInputValue } from "../../utils/kigaliTime";
@@ -289,10 +290,16 @@ export default function Overview() {
           />
         )}
 
-        {/* Side-by-Side Pending Payouts & Emergency Target Widgets */}
+        {/* Pending receivables and emergency target widgets */}
         <Grid container spacing={2} sx={{ width: "100%", mb: 2 }}>
           <Grid item xs={12} md={6}>
             <PendingEarningsWidget
+              key={refreshKey}
+              onClaimSuccess={fetchDashboardData}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <PendingFriendPortalPayoutsWidget
               key={refreshKey}
               onClaimSuccess={fetchDashboardData}
             />

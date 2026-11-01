@@ -11,6 +11,7 @@ import {
   SavingsOutlined,
   PieChartOutlineOutlined, // Added icon for Allocations
   TaskAltOutlined,
+  TranslateOutlined,
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import SidebarContext from "../context/SidebarContext";
@@ -165,6 +166,13 @@ export default function Sidebar() {
               linkTo="/allocations"
               style={{ color: colors.grey[100] }}
               text="Allocations"
+            />
+            <MenuLink
+              icon={<TranslateOutlined />}
+              onClick={handleClick}
+              linkTo="/friend-portal-letters"
+              style={{ color: colors.grey[100] }}
+              text="Friend Portal Letters"
             />
             <MenuLink
               icon={<SettingsOutlined />}

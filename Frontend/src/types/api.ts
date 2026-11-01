@@ -435,3 +435,59 @@ export interface ActionCenterPayload {
 }
 
 export type AppDateFormat = "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
+
+
+export interface FriendPortalLetterEntry {
+  id: number;
+  workDate: string;
+  lettersCount: number;
+  excludedLetters: number;
+  payableLetters: number;
+  earnings: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FriendPortalShiftSummary {
+  shiftStart: string;
+  shiftEnd: string;
+  totalLetters: number;
+  excludedLetters: number;
+  payableLetters: number;
+  earnings: number;
+  status: "open" | "pending" | "collected" | "no_payable";
+  payoutId: number | null;
+  payoutAmount: number | null;
+  resetAt: string | null;
+  collectedAt: string | null;
+}
+
+export interface FriendPortalPendingPayout {
+  id: number;
+  shiftStart: string;
+  shiftEnd: string;
+  totalLetters: number;
+  excludedLetters: number;
+  payableLetters: number;
+  amount: number;
+  description: string;
+  resetAt: string;
+}
+
+export interface FriendPortalLettersPayload {
+  month: string;
+  policy: {
+    deductionScope: string;
+    excludedLettersPerShift: number;
+    ratePerLetter: number;
+  };
+  summary: {
+    totalLetters: number;
+    excludedLetters: number;
+    payableLetters: number;
+    earnings: number;
+  };
+  shiftSummaries: FriendPortalShiftSummary[];
+  entries: FriendPortalLetterEntry[];
+}
