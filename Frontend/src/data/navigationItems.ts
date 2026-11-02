@@ -26,5 +26,8 @@ export const navigationItems: NavigationItem[] = [
   { label: "Eisenhower Matrix", path: "/productivity/eisenhower", description: "Prioritize tasks by urgency and importance", keywords: ["urgent", "important", "quadrants", "priorities"] },
   { label: "Habits", path: "/productivity/habits", description: "Track routines, streaks and daily completion", keywords: ["routine", "streak", "daily", "habit tracker"] },
   { label: "Focus Timer", path: "/productivity/focus", description: "Run Pomodoro sessions and review focus time", keywords: ["pomodoro", "timer", "concentration", "focus"] },
+  { label: "Personal Goals", path: "/productivity/goals", description: "Set personal goals, milestones and track progress", keywords: ["objectives", "milestones", "targets", "progress"] },
+  { label: "Notes", path: "/productivity/notes", description: "Capture ideas and organize personal notes", keywords: ["quick capture", "ideas", "journal", "memo"] },
+  { label: "Countdowns", path: "/productivity/countdowns", description: "Track birthdays, trips, holidays and important dates", keywords: ["events", "days remaining", "anniversary", "birthday"] },
   { label: "Settings", path: "/settings", description: "Open profile and preference settings", keywords: ["profile", "preferences", "account", "password"] },
 ];

@@ -217,6 +217,105 @@ export interface ProjectInput {
   targetDate?: string | null;
 }
 
+
+export interface ProductivityGoalMilestone {
+  id: number;
+  goalId: number;
+  title: string;
+  description: string;
+  dueDate: string | null;
+  isCompleted: boolean;
+  sortOrder: number;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductivityGoal {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  status: "active" | "completed" | "archived";
+  startDate: string | null;
+  targetDate: string | null;
+  progressMode: "milestones" | "manual";
+  manualProgress: number;
+  progress: number;
+  milestoneCount: number;
+  completedMilestoneCount: number;
+  createdAt: string;
+  updatedAt: string;
+  milestones?: ProductivityGoalMilestone[];
+}
+
+export interface GoalInput {
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  status?: ProductivityGoal["status"];
+  startDate?: string | null;
+  targetDate?: string | null;
+  progressMode?: ProductivityGoal["progressMode"];
+  manualProgress?: number;
+}
+
+export interface GoalMilestoneInput {
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  isCompleted?: boolean;
+  sortOrder?: number;
+}
+
+export interface ProductivityNote {
+  id: number;
+  title: string;
+  content: string;
+  category: string;
+  color: string;
+  isPinned: boolean;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteInput {
+  title?: string | null;
+  content: string;
+  category?: string | null;
+  color?: string;
+  isPinned?: boolean;
+  status?: ProductivityNote["status"];
+}
+
+export interface ProductivityCountdown {
+  id: number;
+  title: string;
+  description: string;
+  eventDate: string;
+  nextEventDate: string;
+  eventTime: string | null;
+  category: string;
+  color: string;
+  recurrence: "none" | "yearly";
+  status: "active" | "archived";
+  daysRemaining: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CountdownInput {
+  title: string;
+  description?: string | null;
+  eventDate: string;
+  eventTime?: string | null;
+  category?: string | null;
+  color?: string;
+  recurrence?: ProductivityCountdown["recurrence"];
+  status?: ProductivityCountdown["status"];
+}
+
 const DEV_API_URL = "http://localhost:5000/api";
 const PROD_API_URL = "https://wealthtrackeronline.onrender.com/api";
 const baseURL =
@@ -299,6 +398,38 @@ export const productivityApi = {
   updateProject: async (id: number, values: Partial<ProjectInput>): Promise<ProductivityProject> =>
     (await client.put<{ project: ProductivityProject }>(`/projects/${id}`, values)).data.project,
   archiveProject: async (id: number): Promise<void> => { await client.delete(`/projects/${id}`); },
+
+
+  getGoals: async (includeArchived = false, search = ""): Promise<ProductivityGoal[]> =>
+    (await client.get<{ goals: ProductivityGoal[] }>("/goals", { params: { includeArchived, search: search || undefined } })).data.goals,
+  getGoal: async (id: number): Promise<ProductivityGoal> =>
+    (await client.get<{ goal: ProductivityGoal }>(`/goals/${id}`)).data.goal,
+  createGoal: async (values: GoalInput): Promise<ProductivityGoal> =>
+    (await client.post<{ goal: ProductivityGoal }>("/goals", values)).data.goal,
+  updateGoal: async (id: number, values: Partial<GoalInput>): Promise<ProductivityGoal> =>
+    (await client.put<{ goal: ProductivityGoal }>(`/goals/${id}`, values)).data.goal,
+  archiveGoal: async (id: number): Promise<void> => { await client.delete(`/goals/${id}`); },
+  createGoalMilestone: async (goalId: number, values: GoalMilestoneInput): Promise<ProductivityGoalMilestone> =>
+    (await client.post<{ milestone: ProductivityGoalMilestone }>(`/goals/${goalId}/milestones`, values)).data.milestone,
+  updateGoalMilestone: async (id: number, values: Partial<GoalMilestoneInput>): Promise<ProductivityGoalMilestone> =>
+    (await client.put<{ milestone: ProductivityGoalMilestone }>(`/milestones/${id}`, values)).data.milestone,
+  deleteGoalMilestone: async (id: number): Promise<void> => { await client.delete(`/milestones/${id}`); },
+
+  getNotes: async (includeArchived = false, search = ""): Promise<ProductivityNote[]> =>
+    (await client.get<{ notes: ProductivityNote[] }>("/notes", { params: { includeArchived, search: search || undefined } })).data.notes,
+  createNote: async (values: NoteInput): Promise<ProductivityNote> =>
+    (await client.post<{ note: ProductivityNote }>("/notes", values)).data.note,
+  updateNote: async (id: number, values: Partial<NoteInput>): Promise<ProductivityNote> =>
+    (await client.put<{ note: ProductivityNote }>(`/notes/${id}`, values)).data.note,
+  archiveNote: async (id: number): Promise<void> => { await client.delete(`/notes/${id}`); },
+
+  getCountdowns: async (includeArchived = false, search = ""): Promise<ProductivityCountdown[]> =>
+    (await client.get<{ countdowns: ProductivityCountdown[] }>("/countdowns", { params: { includeArchived, search: search || undefined } })).data.countdowns,
+  createCountdown: async (values: CountdownInput): Promise<ProductivityCountdown> =>
+    (await client.post<{ countdown: ProductivityCountdown }>("/countdowns", values)).data.countdown,
+  updateCountdown: async (id: number, values: Partial<CountdownInput>): Promise<ProductivityCountdown> =>
+    (await client.put<{ countdown: ProductivityCountdown }>(`/countdowns/${id}`, values)).data.countdown,
+  archiveCountdown: async (id: number): Promise<void> => { await client.delete(`/countdowns/${id}`); },
 
   createSubtask: async (taskId: number, values: { title: string; isCompleted?: boolean; sortOrder?: number }): Promise<ProductivitySubtask> =>
     (await client.post<{ subtask: ProductivitySubtask }>(`/tasks/${taskId}/subtasks`, values)).data.subtask,

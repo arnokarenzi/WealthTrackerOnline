@@ -20,6 +20,9 @@ import {
   GridViewOutlined,
   RepeatOutlined,
   SelfImprovementOutlined,
+  FlagOutlined,
+  NoteAltOutlined,
+  HourglassBottomOutlined,
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import SidebarContext from "../context/SidebarContext";
@@ -244,6 +247,27 @@ export default function Sidebar() {
               linkTo="/productivity/focus"
               style={{ color: colors.grey[100] }}
               text="Focus Timer"
+            />
+            <MenuLink
+              icon={<FlagOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/goals"
+              style={{ color: colors.grey[100] }}
+              text="Personal Goals"
+            />
+            <MenuLink
+              icon={<NoteAltOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/notes"
+              style={{ color: colors.grey[100] }}
+              text="Notes"
+            />
+            <MenuLink
+              icon={<HourglassBottomOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/countdowns"
+              style={{ color: colors.grey[100] }}
+              text="Countdowns"
             />
             <MenuLink
               icon={<SettingsOutlined />}

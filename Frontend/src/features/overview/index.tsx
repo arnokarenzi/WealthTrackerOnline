@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+// @ts-ignore - @mui/material declarations are not present in this installation.
 import {
   Box,
   Grid,
@@ -17,6 +18,7 @@ import {
   TextField,
   Alert,
 } from "@mui/material";
+// @ts-ignore - @mui/icons-material declarations are not present in this installation.
 import {
   AttachMoney,
   ShoppingCartCheckout,

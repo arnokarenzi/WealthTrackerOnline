@@ -11,6 +11,9 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import RepeatOutlinedIcon from "@mui/icons-material/RepeatOutlined";
 import SelfImprovementOutlinedIcon from "@mui/icons-material/SelfImprovementOutlined";
+import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
+import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
+import HourglassBottomOutlinedIcon from "@mui/icons-material/HourglassBottomOutlined";
 import { productivityApi, productivityErrorMessage } from "../../../services/productivityApi";
 import type { ProductivitySettings, ProductivitySummary } from "../../../services/productivityApi";
 
@@ -31,6 +34,9 @@ const quickLinks = [
   { title: "Eisenhower Matrix", description: "Choose what to do, schedule, delegate or reconsider.", path: "/productivity/eisenhower", icon: <GridViewOutlinedIcon fontSize="large" /> },
   { title: "Habits", description: "Track daily routines, streaks and consistency.", path: "/productivity/habits", icon: <RepeatOutlinedIcon fontSize="large" /> },
   { title: "Focus Timer", description: "Run Pomodoro sessions and review focused time.", path: "/productivity/focus", icon: <SelfImprovementOutlinedIcon fontSize="large" /> },
+  { title: "Personal Goals", description: "Set meaningful goals, track milestones and review progress.", path: "/productivity/goals", icon: <FlagOutlinedIcon fontSize="large" /> },
+  { title: "Notes", description: "Capture ideas and keep useful information organized.", path: "/productivity/notes", icon: <NoteAltOutlinedIcon fontSize="large" /> },
+  { title: "Countdowns", description: "Keep birthdays, holidays and important dates visible.", path: "/productivity/countdowns", icon: <HourglassBottomOutlinedIcon fontSize="large" /> },
 ];
 
 export default function ProductivityHome() {

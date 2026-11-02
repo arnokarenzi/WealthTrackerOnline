@@ -1,5 +1,28 @@
 import express from "express";
 import {
+  archiveProductivityGoalController,
+  createProductivityGoalController,
+  createProductivityMilestoneController,
+  deleteProductivityMilestoneController,
+  getProductivityGoalController,
+  listProductivityGoalsController,
+  listProductivityMilestonesController,
+  updateProductivityGoalController,
+  updateProductivityMilestoneController,
+} from "../../controllers/productivity/productivityGoalsController.js";
+import {
+  archiveProductivityNoteController,
+  createProductivityNoteController,
+  listProductivityNotesController,
+  updateProductivityNoteController,
+} from "../../controllers/productivity/productivityNotesController.js";
+import {
+  archiveProductivityCountdownController,
+  createProductivityCountdownController,
+  listProductivityCountdownsController,
+  updateProductivityCountdownController,
+} from "../../controllers/productivity/productivityCountdownsController.js";
+import {
   archiveProductivityHabitController,
   createProductivityHabitController,
   deleteProductivityHabitLogController,
@@ -77,6 +100,30 @@ router.delete("/habits/:id/logs/:date", deleteProductivityHabitLogController);
 router.get("/focus/summary", getProductivityFocusSummaryController);
 router.get("/focus/sessions", listProductivityFocusSessionsController);
 router.post("/focus/sessions", createProductivityFocusSessionController);
+
+
+// Personal goals and milestones (Phase 5)
+router.get("/goals", listProductivityGoalsController);
+router.post("/goals", createProductivityGoalController);
+router.get("/goals/:id", getProductivityGoalController);
+router.put("/goals/:id", updateProductivityGoalController);
+router.delete("/goals/:id", archiveProductivityGoalController);
+router.get("/goals/:id/milestones", listProductivityMilestonesController);
+router.post("/goals/:id/milestones", createProductivityMilestoneController);
+router.put("/milestones/:id", updateProductivityMilestoneController);
+router.delete("/milestones/:id", deleteProductivityMilestoneController);
+
+// Quick notes (Phase 5)
+router.get("/notes", listProductivityNotesController);
+router.post("/notes", createProductivityNoteController);
+router.put("/notes/:id", updateProductivityNoteController);
+router.delete("/notes/:id", archiveProductivityNoteController);
+
+// Personal countdowns and yearly recurring events (Phase 5)
+router.get("/countdowns", listProductivityCountdownsController);
+router.post("/countdowns", createProductivityCountdownController);
+router.put("/countdowns/:id", updateProductivityCountdownController);
+router.delete("/countdowns/:id", archiveProductivityCountdownController);
 
 // Tasks and subtasks
 router.get("/tasks", listProductivityTasksController);
