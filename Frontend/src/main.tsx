@@ -33,6 +33,8 @@ import ProductivityFocusPage from "./features/productivity/focus";
 import ProductivityGoalsPage from "./features/productivity/goals";
 import ProductivityNotesPage from "./features/productivity/notes";
 import ProductivityCountdownsPage from "./features/productivity/countdowns";
+import ProductivityReviewsPage from "./features/productivity/reviews";
+import ProductivityInsightsPage from "./features/productivity/insights";
 
 // Register the service worker early so the Home Screen app can receive
 // standards-based Web Push notifications. Permission is requested later
@@ -76,6 +78,8 @@ const router = createHashRouter(
       <Route path="/productivity/goals" element={<ProductivityGoalsPage />} />
       <Route path="/productivity/notes" element={<ProductivityNotesPage />} />
       <Route path="/productivity/countdowns" element={<ProductivityCountdownsPage />} />
+      <Route path="/productivity/reviews" element={<ProductivityReviewsPage />} />
+      <Route path="/productivity/insights" element={<ProductivityInsightsPage />} />
     </Route>,
   ),
 );

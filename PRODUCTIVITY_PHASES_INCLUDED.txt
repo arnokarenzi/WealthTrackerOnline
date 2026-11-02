@@ -1,5 +1,11 @@
-FinTrack Productivity overlay includes Phases 1-5.
-This is a changed-files overlay for the existing ~/fintrack project.
-It is not a full project backup or fresh installation.
-No .env, credentials, node_modules, dist files, or protected financial feature source folders are included.
-Apply only the database migrations that are missing from the target Aiven database.
+FinTrack Productivity Overlay — Phases 1 through 6
+
+Phase 1: Productivity workspace foundation and settings
+Phase 2: Tasks, Projects and My Day
+Phase 3: Calendar and Eisenhower Matrix
+Phase 4: Habits and Focus Timer
+Phase 5: Personal Goals, Milestones, Notes and Countdowns
+Phase 6: Daily Reviews, Weekly Reviews and Productivity Insights
+
+This package is an overlay for the existing FinTrack project, not a standalone application.
+Merge it into the existing ~/fintrack folder. Do not delete or replace the full project.

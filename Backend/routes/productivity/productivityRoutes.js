@@ -1,5 +1,14 @@
 import express from "express";
 import {
+  getProductivityDailyReviewController,
+  getProductivityWeeklyReviewController,
+  listProductivityDailyReviewHistoryController,
+  listProductivityWeeklyReviewHistoryController,
+  saveProductivityDailyReviewController,
+  saveProductivityWeeklyReviewController,
+} from "../../controllers/productivity/productivityReviewsController.js";
+import { getProductivityInsightsController } from "../../controllers/productivity/productivityInsightsController.js";
+import {
   archiveProductivityGoalController,
   createProductivityGoalController,
   createProductivityMilestoneController,
@@ -66,6 +75,15 @@ import {
 } from "../../controllers/productivity/productivityTasksController.js";
 
 const router = express.Router();
+
+// Daily and weekly reflections, plus calculated metrics (Phase 6).
+router.get("/reviews/daily/history", listProductivityDailyReviewHistoryController);
+router.get("/reviews/daily", getProductivityDailyReviewController);
+router.put("/reviews/daily", saveProductivityDailyReviewController);
+router.get("/reviews/weekly/history", listProductivityWeeklyReviewHistoryController);
+router.get("/reviews/weekly", getProductivityWeeklyReviewController);
+router.put("/reviews/weekly", saveProductivityWeeklyReviewController);
+router.get("/insights", getProductivityInsightsController);
 
 // Workspace preferences (Phase 1)
 router.get("/settings", getProductivitySettingsController);

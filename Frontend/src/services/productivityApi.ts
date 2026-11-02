@@ -316,6 +316,100 @@ export interface CountdownInput {
   status?: ProductivityCountdown["status"];
 }
 
+
+
+export interface ProductivityDailyReview {
+  id: number;
+  reviewDate: string;
+  moodRating: number | null;
+  energyRating: number | null;
+  wins: string;
+  challenges: string;
+  lessons: string;
+  gratitude: string;
+  tomorrowPriorities: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyReviewInput {
+  reviewDate: string;
+  moodRating?: number | null;
+  energyRating?: number | null;
+  wins?: string;
+  challenges?: string;
+  lessons?: string;
+  gratitude?: string;
+  tomorrowPriorities?: string;
+  notes?: string;
+}
+
+export interface ProductivityWeeklyReview {
+  id: number;
+  weekStart: string;
+  weekEnd: string;
+  overallRating: number | null;
+  wins: string;
+  challenges: string;
+  lessons: string;
+  nextWeekPriorities: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WeeklyReviewInput {
+  weekStart: string;
+  overallRating?: number | null;
+  wins?: string;
+  challenges?: string;
+  lessons?: string;
+  nextWeekPriorities?: string;
+  notes?: string;
+}
+
+export interface ProductivityInsightsTrendDay {
+  date: string;
+  dueTasks: number;
+  completedDueTasks: number;
+  tasksCompleted: number;
+  habitEntries: number;
+  habitsCompleted: number;
+  focusSessions: number;
+  focusMinutes: number;
+}
+
+export interface ProductivityInsights {
+  startDate: string;
+  endDate: string;
+  generatedAt: string;
+  metrics: {
+    dueTasks: number;
+    completedDueTasks: number;
+    pendingDueTasks: number;
+    currentlyOverdueDueTasks: number;
+    dueTaskCompletionRate: number | null;
+    tasksCompletedInPeriod: number;
+    loggedHabitEntries: number;
+    completedHabitEntries: number;
+    habitLoggedEntryCompletionRate: number | null;
+    trackedHabits: number;
+    completedFocusSessions: number;
+    focusMinutes: number;
+    averageFocusMinutes: number;
+    activeGoals: number;
+    averageActiveGoalProgress: number | null;
+    goalsWithTargetInPeriod: number;
+    activeProjects: number;
+    completedProjects: number;
+    dailyReviewsSaved: number;
+    weeklyReviewsOverlappingPeriod: number;
+  };
+  trend: ProductivityInsightsTrendDay[];
+  definitions: Record<string, string>;
+}
+
 const DEV_API_URL = "http://localhost:5000/api";
 const PROD_API_URL = "https://wealthtrackeronline.onrender.com/api";
 const baseURL =
@@ -373,6 +467,21 @@ export const productivityApi = {
     (await client.get<ProductivityFocusSummary>("/focus/summary", { params: date ? { date } : undefined })).data,
   createFocusSession: async (values: FocusSessionInput): Promise<ProductivityFocusSession> =>
     (await client.post<{ session: ProductivityFocusSession }>("/focus/sessions", values)).data.session,
+
+  getDailyReview: async (date: string): Promise<ProductivityDailyReview | null> =>
+    (await client.get<{ reviewDate: string; review: ProductivityDailyReview | null }>("/reviews/daily", { params: { date } })).data.review,
+  saveDailyReview: async (values: DailyReviewInput): Promise<ProductivityDailyReview> =>
+    (await client.put<{ review: ProductivityDailyReview }>("/reviews/daily", values)).data.review,
+  getDailyReviewHistory: async (limit = 30): Promise<ProductivityDailyReview[]> =>
+    (await client.get<{ reviews: ProductivityDailyReview[] }>("/reviews/daily/history", { params: { limit } })).data.reviews,
+  getWeeklyReview: async (weekStart: string): Promise<ProductivityWeeklyReview | null> =>
+    (await client.get<{ review: ProductivityWeeklyReview | null }>("/reviews/weekly", { params: { weekStart } })).data.review,
+  saveWeeklyReview: async (values: WeeklyReviewInput): Promise<ProductivityWeeklyReview> =>
+    (await client.put<{ review: ProductivityWeeklyReview }>("/reviews/weekly", values)).data.review,
+  getWeeklyReviewHistory: async (limit = 20): Promise<ProductivityWeeklyReview[]> =>
+    (await client.get<{ reviews: ProductivityWeeklyReview[] }>("/reviews/weekly/history", { params: { limit } })).data.reviews,
+  getInsights: async (startDate: string, endDate: string): Promise<ProductivityInsights> =>
+    (await client.get<ProductivityInsights>("/insights", { params: { startDate, endDate } })).data,
 
   getSummary: async (): Promise<ProductivitySummary> => (await client.get<ProductivitySummary>("/summary")).data,
   getMyDay: async (date?: string): Promise<ProductivityMyDay> =>

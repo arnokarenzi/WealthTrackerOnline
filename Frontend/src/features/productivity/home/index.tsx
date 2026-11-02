@@ -14,6 +14,8 @@ import SelfImprovementOutlinedIcon from "@mui/icons-material/SelfImprovementOutl
 import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import HourglassBottomOutlinedIcon from "@mui/icons-material/HourglassBottomOutlined";
+import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import { productivityApi, productivityErrorMessage } from "../../../services/productivityApi";
 import type { ProductivitySettings, ProductivitySummary } from "../../../services/productivityApi";
 
@@ -37,6 +39,8 @@ const quickLinks = [
   { title: "Personal Goals", description: "Set meaningful goals, track milestones and review progress.", path: "/productivity/goals", icon: <FlagOutlinedIcon fontSize="large" /> },
   { title: "Notes", description: "Capture ideas and keep useful information organized.", path: "/productivity/notes", icon: <NoteAltOutlinedIcon fontSize="large" /> },
   { title: "Countdowns", description: "Keep birthdays, holidays and important dates visible.", path: "/productivity/countdowns", icon: <HourglassBottomOutlinedIcon fontSize="large" /> },
+  { title: "Daily & Weekly Reviews", description: "Reflect on what went well and prepare upcoming priorities.", path: "/productivity/reviews", icon: <RateReviewOutlinedIcon fontSize="large" /> },
+  { title: "Productivity Insights", description: "Review real task, habit, focus, project and goal activity.", path: "/productivity/insights", icon: <InsightsOutlinedIcon fontSize="large" /> },
 ];
 
 export default function ProductivityHome() {

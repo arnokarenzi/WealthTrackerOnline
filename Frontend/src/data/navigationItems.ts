@@ -29,5 +29,7 @@ export const navigationItems: NavigationItem[] = [
   { label: "Personal Goals", path: "/productivity/goals", description: "Set personal goals, milestones and track progress", keywords: ["objectives", "milestones", "targets", "progress"] },
   { label: "Notes", path: "/productivity/notes", description: "Capture ideas and organize personal notes", keywords: ["quick capture", "ideas", "journal", "memo"] },
   { label: "Countdowns", path: "/productivity/countdowns", description: "Track birthdays, trips, holidays and important dates", keywords: ["events", "days remaining", "anniversary", "birthday"] },
+  { label: "Daily and Weekly Reviews", path: "/productivity/reviews", description: "Reflect on progress, lessons and priorities", keywords: ["reflection", "journal", "weekly review", "daily review"] },
+  { label: "Productivity Insights", path: "/productivity/insights", description: "Measure task, habit, focus, project and goal activity", keywords: ["analytics", "performance", "statistics", "trends"] },
   { label: "Settings", path: "/settings", description: "Open profile and preference settings", keywords: ["profile", "preferences", "account", "password"] },
 ];

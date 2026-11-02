@@ -23,6 +23,8 @@ import {
   FlagOutlined,
   NoteAltOutlined,
   HourglassBottomOutlined,
+  RateReviewOutlined,
+  InsightsOutlined,
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import SidebarContext from "../context/SidebarContext";
@@ -268,6 +270,20 @@ export default function Sidebar() {
               linkTo="/productivity/countdowns"
               style={{ color: colors.grey[100] }}
               text="Countdowns"
+            />
+            <MenuLink
+              icon={<RateReviewOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/reviews"
+              style={{ color: colors.grey[100] }}
+              text="Daily & Weekly Reviews"
+            />
+            <MenuLink
+              icon={<InsightsOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/insights"
+              style={{ color: colors.grey[100] }}
+              text="Productivity Insights"
             />
             <MenuLink
               icon={<SettingsOutlined />}
