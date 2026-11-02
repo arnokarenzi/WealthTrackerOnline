@@ -20,6 +20,7 @@ import dailyLetterRoutes from "./routes/dailyLetterRoutes.js";
 import cronRoutes from "./routes/cronRoutes.js";
 import financeFeaturesRoutes from "./routes/financeFeaturesRoutes.js";
 import friendPortalLettersRoutes from "./routes/friendPortalLettersRoutes.js";
+import productivityRoutes from "./routes/productivity/productivityRoutes.js";
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ app.use("/api/pending-earnings", pendingEarningsRouter);
 app.use("/api/push", pushRoutes);
 app.use("/api/daily-letters", dailyLetterRoutes);
 app.use("/api/friend-portal-letters", friendPortalLettersRoutes);
+app.use("/api/productivity", productivityRoutes);
 app.use("/api/cron", cronRoutes);
 app.use("/api", financeFeaturesRoutes);
 

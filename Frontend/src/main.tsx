@@ -22,6 +22,14 @@ import SavingsGoals from "./features/savings/SavingsGoals";
 import AllocationsPage from "./features/allocations";
 import ActionCenter from "./features/actioncenter";
 import FriendPortalLetters from "./features/friendportalletters";
+import ProductivityHome from "./features/productivity/home";
+import ProductivityTasksPage from "./features/productivity/tasks";
+import ProductivityProjectsPage from "./features/productivity/projects";
+import ProductivityMyDayPage from "./features/productivity/myday";
+import ProductivityCalendarPage from "./features/productivity/calendar";
+import ProductivityEisenhowerPage from "./features/productivity/eisenhower";
+import ProductivityHabitsPage from "./features/productivity/habits";
+import ProductivityFocusPage from "./features/productivity/focus";
 
 // Register the service worker early so the Home Screen app can receive
 // standards-based Web Push notifications. Permission is requested later
@@ -54,6 +62,14 @@ const router = createHashRouter(
       <Route path="/settings" element={<Settings />} />
       <Route path="/actions" element={<ActionCenter />} />
       <Route path="/friend-portal-letters" element={<FriendPortalLetters />} />
+      <Route path="/productivity" element={<ProductivityHome />} />
+      <Route path="/productivity/my-day" element={<ProductivityMyDayPage />} />
+      <Route path="/productivity/tasks" element={<ProductivityTasksPage />} />
+      <Route path="/productivity/projects" element={<ProductivityProjectsPage />} />
+      <Route path="/productivity/calendar" element={<ProductivityCalendarPage />} />
+      <Route path="/productivity/eisenhower" element={<ProductivityEisenhowerPage />} />
+      <Route path="/productivity/habits" element={<ProductivityHabitsPage />} />
+      <Route path="/productivity/focus" element={<ProductivityFocusPage />} />
     </Route>,
   ),
 );

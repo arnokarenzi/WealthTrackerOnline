@@ -18,5 +18,13 @@ export const navigationItems: NavigationItem[] = [
   { label: "Allocations", path: "/allocations", description: "Set allocation percentages and recommendations", keywords: ["emergency", "essentials", "savings", "investment"] },
   { label: "Savings Goals", path: "/savings", description: "Set and track savings targets", keywords: ["goals", "target", "saving"] },
   { label: "Net Worth", path: "/networth", description: "Review the net-worth view", keywords: ["assets", "wealth", "liabilities"] },
+  { label: "Productivity Home", path: "/productivity", description: "Plan tasks, habits, focus and personal goals", keywords: ["productivity", "tasks", "planner", "habits", "focus", "goals", "calendar"] },
+  { label: "My Day", path: "/productivity/my-day", description: "See overdue tasks, today’s plan and completed work", keywords: ["today", "daily plan", "overdue", "tasks"] },
+  { label: "Tasks", path: "/productivity/tasks", description: "Create, organize and prioritize personal tasks", keywords: ["todo", "checklist", "priority", "projects"] },
+  { label: "Projects", path: "/productivity/projects", description: "Group tasks and track project progress", keywords: ["work", "planning", "milestones"] },
+  { label: "Calendar", path: "/productivity/calendar", description: "Plan appointments, scheduled tasks and deadlines", keywords: ["planner", "schedule", "week", "month", "events"] },
+  { label: "Eisenhower Matrix", path: "/productivity/eisenhower", description: "Prioritize tasks by urgency and importance", keywords: ["urgent", "important", "quadrants", "priorities"] },
+  { label: "Habits", path: "/productivity/habits", description: "Track routines, streaks and daily completion", keywords: ["routine", "streak", "daily", "habit tracker"] },
+  { label: "Focus Timer", path: "/productivity/focus", description: "Run Pomodoro sessions and review focus time", keywords: ["pomodoro", "timer", "concentration", "focus"] },
   { label: "Settings", path: "/settings", description: "Open profile and preference settings", keywords: ["profile", "preferences", "account", "password"] },
 ];

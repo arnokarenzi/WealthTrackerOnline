@@ -12,6 +12,14 @@ import {
   PieChartOutlineOutlined, // Added icon for Allocations
   TaskAltOutlined,
   TranslateOutlined,
+  DashboardCustomizeOutlined,
+  ChecklistOutlined,
+  FolderOpenOutlined,
+  TodayOutlined,
+  CalendarMonthOutlined,
+  GridViewOutlined,
+  RepeatOutlined,
+  SelfImprovementOutlined,
 } from "@mui/icons-material";
 import { tokens } from "../assets/theme";
 import SidebarContext from "../context/SidebarContext";
@@ -173,6 +181,69 @@ export default function Sidebar() {
               linkTo="/friend-portal-letters"
               style={{ color: colors.grey[100] }}
               text="Friend Portal Letters"
+            />
+            <Typography
+              variant="h6"
+              color={colors.grey[300]}
+              sx={{ m: "24px 0 5px 30px" }}
+            >
+              Personal Productivity
+            </Typography>
+            <MenuLink
+              icon={<DashboardCustomizeOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity"
+              style={{ color: colors.grey[100] }}
+              text="Productivity Home"
+            />
+            <MenuLink
+              icon={<TodayOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/my-day"
+              style={{ color: colors.grey[100] }}
+              text="My Day"
+            />
+            <MenuLink
+              icon={<ChecklistOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/tasks"
+              style={{ color: colors.grey[100] }}
+              text="Tasks"
+            />
+            <MenuLink
+              icon={<FolderOpenOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/projects"
+              style={{ color: colors.grey[100] }}
+              text="Projects"
+            />
+            <MenuLink
+              icon={<CalendarMonthOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/calendar"
+              style={{ color: colors.grey[100] }}
+              text="Calendar"
+            />
+            <MenuLink
+              icon={<GridViewOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/eisenhower"
+              style={{ color: colors.grey[100] }}
+              text="Eisenhower Matrix"
+            />
+            <MenuLink
+              icon={<RepeatOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/habits"
+              style={{ color: colors.grey[100] }}
+              text="Habits"
+            />
+            <MenuLink
+              icon={<SelfImprovementOutlined />}
+              onClick={handleClick}
+              linkTo="/productivity/focus"
+              style={{ color: colors.grey[100] }}
+              text="Focus Timer"
             />
             <MenuLink
               icon={<SettingsOutlined />}
