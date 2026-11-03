@@ -1,3 +1,4 @@
+import { sendFriendPortalShiftTargetReachedNotification } from "../services/pushService.js";
 import {
   claimFriendPortalPayout,
   deleteFriendPortalDailyLetters,
@@ -80,9 +81,19 @@ export const saveFriendPortalLetters = async (req, res) => {
 
   try {
     const entry = await saveFriendPortalDailyLetters({ workDate, lettersCount, notes });
+    let targetNotification = null;
+    try {
+      // Push failure must never roll back a successfully saved daily record.
+      targetNotification = await sendFriendPortalShiftTargetReachedNotification();
+    } catch (pushError) {
+      console.error("Friend Portal target-complete push failed:", pushError);
+    }
     return res.status(200).json({
       message: "Friend-portal letters saved successfully.",
       entry,
+      targetNotification: targetNotification
+        ? { sent: Number(targetNotification.sent) || 0, skipped: targetNotification.skipped || null }
+        : null,
     });
   } catch (error) {
     return handleServiceError(res, error, "Save friend-portal letters");

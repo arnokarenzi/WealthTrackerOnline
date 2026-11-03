@@ -394,6 +394,7 @@ export interface SettingsPayload {
     budgetCriticalPercent: number;
     notifications: {
       shiftPacing: boolean;
+      friendPortalPacing: boolean;
       dailyTarget: boolean;
       leaderboard: boolean;
       budgetAlerts: boolean;

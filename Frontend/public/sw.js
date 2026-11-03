@@ -7,6 +7,7 @@ const NOTIFICATION_PREFERENCES_KEY = "notificationCategories";
 
 function notificationCategoryForTag(tag) {
   if (tag.startsWith("shift-pacing-") || tag.startsWith("test-shift-pacing-")) return "shiftPacing";
+  if (tag.startsWith("friend-portal-pacing-") || tag.startsWith("test-friend-portal-pacing-")) return "friendPortalPacing";
   if (tag.startsWith("daily-target-complete") || tag.startsWith("test-daily-target-complete")) return "dailyTarget";
   if (tag.startsWith("leaderboard-rank-")) return "leaderboard";
   return null;

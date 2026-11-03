@@ -15,6 +15,7 @@ const DEFAULT_PREFERENCES = {
   budgetCriticalPercent: 100,
   notifications: {
     shiftPacing: true,
+    friendPortalPacing: true,
     dailyTarget: true,
     leaderboard: true,
     budgetAlerts: true,
@@ -103,6 +104,10 @@ function normalizedPreferences(value) {
       shiftPacing:
         typeof rawNotifications.shiftPacing === "boolean"
           ? rawNotifications.shiftPacing
+          : true,
+      friendPortalPacing:
+        typeof rawNotifications.friendPortalPacing === "boolean"
+          ? rawNotifications.friendPortalPacing
           : true,
       dailyTarget:
         typeof rawNotifications.dailyTarget === "boolean"

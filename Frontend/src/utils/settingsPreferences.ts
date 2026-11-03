@@ -3,6 +3,8 @@ export type AppDateFormat = "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
 export interface NotificationCategoryPreferences {
   /** Scheduled 08:00, 12:00, and 18:00 Kigali-time push alerts. */
   shiftPacing: boolean;
+  /** Scheduled 08:00, 12:00 and 18:00 Kigali-time Friend Portal shift alerts. */
+  friendPortalPacing: boolean;
   /** Push notification sent when the daily letter target is reached. */
   dailyTarget: boolean;
   /** Push notifications when the leaderboard position improves. */
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: LocalSettingsPreferences = {
   budgetCriticalPercent: 100,
   notifications: {
     shiftPacing: true,
+    friendPortalPacing: true,
     dailyTarget: true,
     leaderboard: true,
     budgetAlerts: true,
@@ -76,6 +79,7 @@ export const normalizeLocalSettingsPreferences = (
     budgetCriticalPercent,
     notifications: {
       shiftPacing: typeof rawNotifications.shiftPacing === "boolean" ? rawNotifications.shiftPacing : true,
+      friendPortalPacing: typeof rawNotifications.friendPortalPacing === "boolean" ? rawNotifications.friendPortalPacing : true,
       dailyTarget: typeof rawNotifications.dailyTarget === "boolean" ? rawNotifications.dailyTarget : true,
       leaderboard: typeof rawNotifications.leaderboard === "boolean" ? rawNotifications.leaderboard : true,
       budgetAlerts: typeof rawNotifications.budgetAlerts === "boolean" ? rawNotifications.budgetAlerts : true,

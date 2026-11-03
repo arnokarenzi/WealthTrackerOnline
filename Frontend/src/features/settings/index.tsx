@@ -484,6 +484,11 @@ export default function Settings() {
             />
             <FormControlLabel
               sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
+              control={<Switch checked={preferences.notifications.friendPortalPacing} onChange={(event) => updateNotificationPreference("friendPortalPacing", event.target.checked)} />}
+              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Friend Portal shift pacing reminders</Typography><Typography variant="body2" color="text.secondary">The same 08:00, 12:00 and 18:00 Kigali-time iPhone alerts, showing your friend's 450-letter shift progress, letters remaining and required daily pace.</Typography></Box>}
+            />
+            <FormControlLabel
+              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
               control={<Switch checked={preferences.notifications.dailyTarget} onChange={(event) => updateNotificationPreference("dailyTarget", event.target.checked)} />}
               label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Daily target completion</Typography><Typography variant="body2" color="text.secondary">A push notification when today’s frozen letter target has been reached.</Typography></Box>}
             />

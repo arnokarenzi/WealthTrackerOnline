@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { pool } from "../models/MonthlyBudget.js";
+import { getFriendPortalShiftPacingStatus } from "./friendPortalPacingService.js";
 import {
   ensureDailyLetterTable,
   ensurePacingNotificationLogTable,
@@ -12,6 +13,7 @@ import {
 
 let configured = false;
 let pushSchemaReadyPromise = null;
+let friendPortalPacingLogReadyPromise = null;
 
 const getConfig = () => ({
   subject: process.env.VAPID_SUBJECT,
@@ -58,6 +60,25 @@ export const ensurePushSubscriptionTable = async () => {
       });
   }
   await pushSchemaReadyPromise;
+};
+
+export const ensureFriendPortalPacingNotificationLogTable = async () => {
+  if (!friendPortalPacingLogReadyPromise) {
+    friendPortalPacingLogReadyPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS FriendPortalPacingNotificationLog (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        tracking_date DATE NOT NULL,
+        trigger_key VARCHAR(24) NOT NULL,
+        sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_friend_portal_pacing_trigger (tracking_date, trigger_key)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `).catch((error) => {
+      friendPortalPacingLogReadyPromise = null;
+      throw error;
+    });
+  }
+  await friendPortalPacingLogReadyPromise;
 };
 
 const hashEndpoint = async (endpoint) => {
@@ -262,8 +283,48 @@ export const sendTestNotificationToSubscription = async ({
     );
   }
 
-  const status = await getDailyPacingStatus();
   const testKind = String(kind).toLowerCase();
+  if (testKind === "friend-portal") {
+    const friendStatus = await getFriendPortalShiftPacingStatus();
+    const title = friendStatus.targetReached
+      ? "🎉 Friend Portal Shift Target Complete!"
+      : `🎯 Friend Portal: ${friendStatus.currentRequiredPerDay} Letters/Day Needed`;
+    const body = friendStatus.targetReached
+      ? `Your shift total is ${friendStatus.shiftLetters}/${friendStatus.target} letters. You reached the target! Estimated payable letters: ${friendStatus.payableLettersAtTarget} (RWF ${friendStatus.estimatedEarningsAtTarget.toLocaleString("en-US")}).`
+      : `Shift progress: ${friendStatus.shiftLetters}/${friendStatus.target}. ${friendStatus.remainingShiftLetters} letters remain across ${friendStatus.remainingDaysInShift} days. Today: ${friendStatus.todayLetters} logged; ${friendStatus.todayRemaining} more needed today. At target: ${friendStatus.payableLettersAtTarget} payable letters (about RWF ${friendStatus.estimatedEarningsAtTarget.toLocaleString("en-US")}).`;
+    const tag = `test-friend-portal-pacing-${friendStatus.date}`;
+    try {
+      await webpush.sendNotification(
+        subscription,
+        JSON.stringify({
+          type: tag,
+          title,
+          body,
+          url: getConfig().appUrl,
+          test: true,
+        }),
+        { TTL: 60, urgency: "high" },
+      );
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || error?.status || 0);
+      if (statusCode === 404 || statusCode === 410) {
+        await removePushSubscription(subscription.endpoint);
+      }
+      throw new Error(
+        `Push delivery failed${statusCode ? ` (HTTP ${statusCode})` : ""}: ${error?.message || "unknown error"}`,
+      );
+    }
+    return {
+      ok: true,
+      test: true,
+      kind: testKind,
+      title,
+      body,
+      friendPortalStatus: friendStatus,
+    };
+  }
+
+  const status = await getDailyPacingStatus();
   let title;
   let body;
   let tag;
@@ -500,9 +561,111 @@ export const sendShiftPacingAlertNotification = async ({
   return { ...result, pacing, title, body };
 };
 
-// Called by the Render/cron-job.org scheduler.
-// 00:00 Kigali freezes the daily target; 08:00/12:00/18:00 only deliver
-// notifications based on that snapshot. No target recalculation occurs at 08:00.
+/** Send a Friend Portal pacing alert to the same subscribed devices as the
+ * personal Shift Pacing Notifications. The service worker can suppress this
+ * category independently using the device's Friend Portal notification toggle.
+ */
+export const sendFriendPortalShiftPacingAlertNotification = async ({
+  triggerHour,
+  date,
+} = {}) => {
+  await ensureFriendPortalPacingNotificationLogTable();
+  const hour = Number(triggerHour);
+  if (![8, 12, 18].includes(hour)) {
+    throw new Error("Friend Portal pacing trigger must be 8, 12, or 18 Kigali time.");
+  }
+
+  const pacing = await getFriendPortalShiftPacingStatus();
+  const trackingDate = date || pacing.date;
+  if (pacing.shiftClosed) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "shift-closed", pacing };
+  }
+
+  if (pacing.targetReached) {
+    const completion = await sendFriendPortalShiftTargetReachedNotification({ status: pacing });
+    return { ...completion, skipped: completion.sent > 0 ? undefined : "target-reached", pacing };
+  }
+
+  const rows = await getSubscriptions();
+  if (!rows.length) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "no-subscriptions", pacing };
+  }
+
+  const triggerKey = String(hour).padStart(2, "0");
+  const [claim] = await pool.query(
+    `INSERT IGNORE INTO FriendPortalPacingNotificationLog (tracking_date, trigger_key)
+     VALUES (?, ?)`,
+    [trackingDate, triggerKey],
+  );
+  if (!claim.affectedRows) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "already-sent", pacing };
+  }
+
+  const title = `🎯 Friend Portal: ${pacing.currentRequiredPerDay} Letters/Day Needed`;
+  const todayMessage = pacing.todayRemaining > 0
+    ? `Log ${pacing.todayRemaining} more today.`
+    : `Today's pace is already met (${pacing.todayLetters} logged).`;
+  const body = `Shift progress ${pacing.shiftLetters}/${pacing.target}. ${pacing.remainingShiftLetters} letters left across ${pacing.remainingDaysInShift} days. ${todayMessage} At target: ${pacing.payableLettersAtTarget} payable letters, about RWF ${pacing.estimatedEarningsAtTarget.toLocaleString("en-US")}.`;
+
+  const result = await sendToSubscriptions({
+    title,
+    body,
+    tag: `friend-portal-pacing-${trackingDate}-${hour}`,
+    ttl: 5 * 60,
+  });
+
+  if (result.sent === 0) {
+    await pool.query(
+      `DELETE FROM FriendPortalPacingNotificationLog WHERE tracking_date = ? AND trigger_key = ?`,
+      [trackingDate, triggerKey],
+    );
+  }
+
+  return { ...result, pacing, title, body };
+};
+
+/** Send one target-complete push when the friend's shift reaches 450 letters. */
+export const sendFriendPortalShiftTargetReachedNotification = async ({ status } = {}) => {
+  await ensureFriendPortalPacingNotificationLogTable();
+  const pacing = status || await getFriendPortalShiftPacingStatus();
+  if (!pacing.targetReached || pacing.shiftClosed) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "not-reached-or-closed", pacing };
+  }
+
+  const rows = await getSubscriptions();
+  if (!rows.length) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "no-subscriptions", pacing };
+  }
+
+  const [claim] = await pool.query(
+    `INSERT IGNORE INTO FriendPortalPacingNotificationLog (tracking_date, trigger_key)
+     VALUES (?, 'target-complete')`,
+    [pacing.date],
+  );
+  if (!claim.affectedRows) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "already-sent", pacing };
+  }
+
+  const title = "🎉 Friend Portal Shift Target Complete!";
+  const body = `You reached ${pacing.shiftLetters}/${pacing.target} letters this shift. That's ${pacing.payableLettersAtTarget} payable letters and an estimated RWF ${pacing.estimatedEarningsAtTarget.toLocaleString("en-US")}. Great work!`;
+  const result = await sendToSubscriptions({
+    title,
+    body,
+    tag: `friend-portal-pacing-target-complete-${pacing.date}`,
+    ttl: 60 * 60,
+  });
+  if (result.sent === 0) {
+    await pool.query(
+      `DELETE FROM FriendPortalPacingNotificationLog WHERE tracking_date = ? AND trigger_key = 'target-complete'`,
+      [pacing.date],
+    );
+  }
+  return { ...result, pacing, title, body };
+};
+
+// Called by the existing Render/cron-job.org scheduler. Friend Portal pacing
+// uses the same 08:00/12:00/18:00 calls and the same iPhone Web Push subscription.
+// The 00:00 personal target snapshot remains unchanged.
 export const runScheduledPacingNotification = async () => {
   const kigali = getKigaliTime();
 
@@ -529,20 +692,35 @@ export const runScheduledPacingNotification = async () => {
   // exists, this preserves it and never recalculates it at 08:00.
   const status = await ensureDailyTargetInitialized();
 
+  // The friend-portal alert must still be considered even if the personal
+  // portal's own daily target has already been reached. A Friend Portal push
+  // failure must not suppress the existing personal pacing notifications.
+  let friendPortalPacing;
+  try {
+    friendPortalPacing = await sendFriendPortalShiftPacingAlertNotification({
+      triggerHour: kigali.hour,
+      date: status.date,
+    });
+  } catch (error) {
+    console.error("Friend Portal pacing notification failed:", error?.message || error);
+    friendPortalPacing = { configured: false, attempted: 0, sent: 0, error: "friend-portal-push-failed" };
+  }
+
   if (kigali.hour === 8 && status.targetReached) {
     const completion = await sendDailyTargetReachedNotification({
       dailyTarget: status.dailyTarget,
       letterCount: status.dailyLetterCount,
       date: status.date,
     });
-    return { scheduledHour: 8, status, completion };
+    return { scheduledHour: 8, status, completion, friendPortalPacing };
   }
 
   if (status.targetReached) {
     return {
       scheduledHour: kigali.hour,
       status,
-      skipped: "daily-target-reached",
+      skipped: "personal-daily-target-reached",
+      friendPortalPacing,
     };
   }
 
@@ -551,5 +729,5 @@ export const runScheduledPacingNotification = async () => {
     date: status.date,
   });
 
-  return { scheduledHour: kigali.hour, status, pacing };
+  return { scheduledHour: kigali.hour, status, pacing, friendPortalPacing };
 };
