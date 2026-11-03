@@ -1,6 +1,8 @@
 import webpush from "web-push";
 import { pool } from "../models/MonthlyBudget.js";
 import { getFriendPortalShiftPacingStatus } from "./friendPortalPacingService.js";
+import { isPushNotificationCategoryEnabled } from "./pushPreferenceService.js";
+import { getPushNotificationCategory } from "../utils/pushNotificationCategories.js";
 import {
   ensureDailyLetterTable,
   ensurePacingNotificationLogTable,
@@ -146,7 +148,30 @@ const getSubscriptions = async () => {
   return rows;
 };
 
-const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
+const resolvePushTargetUrl = (targetUrl, route, appUrl) => {
+  if (targetUrl) return targetUrl;
+  if (!route) return appUrl;
+  try {
+    const target = new URL(appUrl);
+    const cleanRoute = String(route).startsWith("/") ? String(route) : `/${route}`;
+    if (target.hash) {
+      target.hash = `#${cleanRoute}`;
+    } else {
+      const basePath = target.pathname.endsWith("/") ? target.pathname : `${target.pathname}/`;
+      target.pathname = `${basePath}${cleanRoute.slice(1)}`;
+    }
+    return target.href;
+  } catch {
+    return appUrl;
+  }
+};
+
+export const sendPushToAllSubscriptions = async ({ title, body, tag, ttl = 300, url, route, category, data }) => {
+  const resolvedCategory = getPushNotificationCategory(tag, category);
+  if (resolvedCategory && !await isPushNotificationCategoryEnabled(resolvedCategory)) {
+    return { configured: true, attempted: 0, sent: 0, skipped: "category-disabled", category: resolvedCategory };
+  }
+
   if (!configureWebPush()) {
     console.warn("Web Push skipped: VAPID secrets are not configured.");
     return { configured: false, attempted: 0, sent: 0 };
@@ -162,7 +187,9 @@ const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
     type: tag,
     title,
     body,
-    url: appUrl,
+    url: resolvePushTargetUrl(url, route || data?.route, appUrl),
+    ...(resolvedCategory ? { category: resolvedCategory } : {}),
+    ...(data && typeof data === "object" ? { data } : {}),
   });
 
   let sent = 0;
@@ -199,6 +226,9 @@ const sendToSubscriptions = async ({ title, body, tag, ttl = 300 }) => {
   return { configured: true, attempted: rows.length, sent };
 };
 
+
+const sendToSubscriptions = sendPushToAllSubscriptions;
+
 /** Sends a motivation push after the user's leaderboard position improves. */
 export const sendLeaderboardOvertakeNotification = async ({
   previousRank,
@@ -234,7 +264,7 @@ export const sendLeaderboardOvertakeNotification = async ({
     body = `You've overtaken ${gained} competitor${gained === 1 ? "" : "s"}! Log ${count} more letter${count === 1 ? "" : "s"} to overtake ${nextName}${nextCompetitorRank ? ` in ${ordinal(nextCompetitorRank)} place` : ""}. Keep climbing!`;
   }
 
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title,
     body,
     tag: `leaderboard-rank-${current}-${Date.now()}`,
@@ -247,7 +277,7 @@ export const sendLeaderboardOvertakeNotification = async ({
 // It sends a generic test notification to saved subscriptions only; it does
 // not update daily-letter progress or consume a scheduled pacing-log slot.
 export const sendDiagnosticPushNotification = async () => {
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title: "WealthTracker Notification Test",
     body: "Your push notification connection is working.",
     tag: `diagnostic-push-${Date.now()}`,
@@ -284,6 +314,34 @@ export const sendTestNotificationToSubscription = async ({
   }
 
   const testKind = String(kind).toLowerCase();
+  if (testKind === "app") {
+    const title = "FinTrack notifications are working";
+    const body = "This iPhone is subscribed to FinTrack push notifications. Category preferences and notification delivery are active.";
+    const tag = `fintrack-general-test-${Date.now()}`;
+    try {
+      await webpush.sendNotification(
+        subscription,
+        JSON.stringify({
+          type: tag,
+          title,
+          body,
+          url: getConfig().appUrl,
+          test: true,
+        }),
+        { TTL: 60, urgency: "high" },
+      );
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || error?.status || 0);
+      if (statusCode === 404 || statusCode === 410) {
+        await removePushSubscription(subscription.endpoint);
+      }
+      throw new Error(
+        `Push delivery failed${statusCode ? ` (HTTP ${statusCode})` : ""}: ${error?.message || "unknown error"}`,
+      );
+    }
+    return { ok: true, test: true, kind: testKind, title, body };
+  }
+
   if (testKind === "friend-portal") {
     const friendStatus = await getFriendPortalShiftPacingStatus();
     const title = friendStatus.targetReached
@@ -355,7 +413,7 @@ export const sendTestNotificationToSubscription = async ({
     tag = "test-daily-target-complete";
   } else {
     throw new Error(
-      "Invalid test notification kind. Use morning, midday, evening, or target.",
+      "Invalid test notification kind. Use morning, midday, evening, target, friend-portal, or app.",
     );
   }
 
@@ -429,7 +487,7 @@ export const sendDailyTargetReachedNotification = async ({
     return { configured: true, attempted: 0, sent: 0, skipped: "already-sent" };
   }
 
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title: "Daily Target Complete 🎉",
     body: `You have reached ${target} letters for today. Daily target complete!`,
     tag: `daily-target-complete-${trackingDate}`,
@@ -541,7 +599,7 @@ export const sendShiftPacingAlertNotification = async ({
   const title = `🚨 Shift Pacing Alert: ${pacing.currentRequiredPerDay} Letters/Day Required`;
   const body = `You have ${pacing.remainingShiftLetters} letters left across ${pacing.remainingDaysInShift} days. Complete ${dailyRemaining} letters today to stay on track for your Gold bonus!`;
 
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title,
     body,
     tag: `shift-pacing-${trackingDate}-${hour}`,
@@ -607,7 +665,7 @@ export const sendFriendPortalShiftPacingAlertNotification = async ({
     : `Today's pace is already met (${pacing.todayLetters} logged).`;
   const body = `Shift progress ${pacing.shiftLetters}/${pacing.target}. ${pacing.remainingShiftLetters} letters left across ${pacing.remainingDaysInShift} days. ${todayMessage} At target: ${pacing.payableLettersAtTarget} payable letters, about RWF ${pacing.estimatedEarningsAtTarget.toLocaleString("en-US")}.`;
 
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title,
     body,
     tag: `friend-portal-pacing-${trackingDate}-${hour}`,
@@ -648,7 +706,7 @@ export const sendFriendPortalShiftTargetReachedNotification = async ({ status } 
 
   const title = "🎉 Friend Portal Shift Target Complete!";
   const body = `You reached ${pacing.shiftLetters}/${pacing.target} letters this shift. That's ${pacing.payableLettersAtTarget} payable letters and an estimated RWF ${pacing.estimatedEarningsAtTarget.toLocaleString("en-US")}. Great work!`;
-  const result = await sendToSubscriptions({
+  const result = await sendPushToAllSubscriptions({
     title,
     body,
     tag: `friend-portal-pacing-target-complete-${pacing.date}`,

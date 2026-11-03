@@ -1,6 +1,7 @@
 import DailyExpense from "../models/DailyExpense.js";
 import { pool } from "../models/MonthlyBudget.js";
 import { getKigaliTime } from "../utils/kigaliTime.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 const n = (v) => {
   const x = Number(v);
@@ -140,6 +141,19 @@ export const addExpense = async (req, res) => {
 
     await connection.commit();
 
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `expense-recorded-${result.insertId}`,
+        title: "Expense recorded",
+        body: `${numAmount.toLocaleString("en-US")} RWF for ${description || finalCategory} was saved in FinTrack.`,
+        route: "/expenses",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Expense activity push failed:", pushError?.message || pushError);
+    }
+
     res.status(201).json({
       message: "Expense saved!",
       id: result.insertId,
@@ -226,6 +240,19 @@ export const deleteExpense = async (req, res) => {
     }
 
     await connection.commit();
+
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `expense-deleted-${expenseId}`,
+        title: "Expense record removed",
+        body: `${expenseAmount.toLocaleString("en-US")} RWF expense record was removed and the wallet refund was processed.`,
+        route: "/expenses",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Expense removal push failed:", pushError?.message || pushError);
+    }
 
     res.json({ message: "Expense deleted successfully!" });
   } catch (err) {

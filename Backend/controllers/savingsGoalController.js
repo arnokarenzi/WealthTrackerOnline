@@ -1,5 +1,6 @@
 import { pool } from "../models/MonthlyBudget.js"; // Import pool for transactions
 import SavingsGoal from "../models/SavingsGoal.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 export const getGoals = async (req, res) => {
   try {
@@ -67,7 +68,28 @@ export const updateGoal = async (req, res) => {
       [amount, id],
     );
 
+    const goalName = goalRows[0].goalName || "your savings goal";
+    const targetAmount = Number(goalRows[0].targetAmount || 0);
+    const newGoalAmount = Number(goalRows[0].currentAmount || 0) + amount;
+    const justReachedGoal = targetAmount > 0
+      && Number(goalRows[0].currentAmount || 0) < targetAmount
+      && newGoalAmount >= targetAmount;
+
     await connection.commit();
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `savings-allocation-${id}-${Date.now()}`,
+        title: justReachedGoal ? "Savings goal reached!" : "Savings contribution recorded",
+        body: justReachedGoal
+          ? `Congratulations! “${goalName}” has reached its ${targetAmount.toLocaleString("en-US")} RWF target.`
+          : `${amount.toLocaleString("en-US")} RWF was moved from your wallet into “${goalName}”. Progress: ${newGoalAmount.toLocaleString("en-US")}${targetAmount > 0 ? ` / ${targetAmount.toLocaleString("en-US")} RWF` : " RWF"}.`,
+        route: "/savings",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Savings allocation push failed:", pushError?.message || pushError);
+    }
     res.json({
       message: "Funds successfully allocated from wallet to savings goal.",
     });

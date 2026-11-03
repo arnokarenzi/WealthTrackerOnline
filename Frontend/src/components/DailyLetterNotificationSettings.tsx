@@ -78,7 +78,7 @@ export default function DailyLetterNotificationSettings() {
   };
 
   const handleTestNotification = async (
-    kind: "morning" | "midday" | "evening" | "target" | "friend-portal",
+    kind: "morning" | "midday" | "evening" | "target" | "friend-portal" | "app",
   ) => {
     setTestBusy(kind);
     setFeedback(null);
@@ -278,6 +278,7 @@ export default function DailyLetterNotificationSettings() {
                 ["evening", "Test 18:00 Alert"],
                 ["target", "Test Target Complete"],
                 ["friend-portal", "Test Friend Portal Alert"],
+                ["app", "Test General FinTrack Push"],
               ].map(([kind, label]) => (
                 <Button
                   key={kind}
@@ -285,7 +286,7 @@ export default function DailyLetterNotificationSettings() {
                   variant="outlined"
                   onClick={() =>
                     handleTestNotification(
-                      kind as "morning" | "midday" | "evening" | "target" | "friend-portal",
+                      kind as "morning" | "midday" | "evening" | "target" | "friend-portal" | "app",
                     )
                   }
                   disabled={Boolean(testBusy) || busy}

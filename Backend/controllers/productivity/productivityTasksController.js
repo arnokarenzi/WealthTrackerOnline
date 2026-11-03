@@ -11,6 +11,7 @@ import {
   createSubtask,
 } from "../../services/productivity/productivityTasksService.js";
 import { getKigaliDateString } from "../../utils/kigaliTime.js";
+import { sendCategoryPushNotification } from "../../services/appPushNotificationService.js";
 import {
   isValidProductivityDate,
   isValidProductivityId,
@@ -97,6 +98,20 @@ export const updateProductivityTaskController = async (req, res) => {
     const existing = await getTaskById(Number(req.params.id));
     if (!existing) return res.status(404).json({ error: "Task not found." });
     const task = await updateTask(Number(req.params.id), validation.values);
+    if (validation.values.status === "completed" && existing.status !== "completed") {
+      try {
+        await sendCategoryPushNotification({
+          category: "taskReminders",
+          eventKey: `task-completed-${task.id}`,
+          title: "Task completed",
+          body: `“${task.title}” has been marked complete.`,
+          route: "/productivity/tasks",
+          ttl: 60 * 60,
+        });
+      } catch (pushError) {
+        console.error("Task completion push failed:", pushError?.message || pushError);
+      }
+    }
     return res.json({ message: "Task updated successfully.", task });
   } catch (error) {
     return sendError(res, error, "update");

@@ -1,6 +1,7 @@
 import { createFocusSession, getFocusSummary, listFocusSessions } from "../../services/productivity/productivityFocusService.js";
 import { getKigaliDateString } from "../../utils/kigaliTime.js";
 import { isValidFocusDateRange, validateFocusSessionInput } from "../../utils/productivityHabitsValidation.js";
+import { sendCategoryPushNotification } from "../../services/appPushNotificationService.js";
 
 const addDays = (date, amount) => {
   const value = new Date(`${date}T00:00:00.000Z`);
@@ -48,6 +49,21 @@ export const createProductivityFocusSessionController = async (req, res) => {
   if (validation.errors.length) return res.status(400).json({ error: validation.errors.join(" ") });
   try {
     const session = await createFocusSession(validation.values);
+    if (session.status === "completed") {
+      try {
+        const duration = Math.max(1, Math.round(Number(session.actualSeconds || 0) / 60));
+        await sendCategoryPushNotification({
+          category: "focusTimer",
+          eventKey: `focus-session-completed-${session.id}`,
+          title: session.sessionType === "focus" ? "Focus session complete" : "Break complete",
+          body: `${duration} minute${duration === 1 ? "" : "s"} ${session.sessionType === "focus" ? "of focus time" : "break time"} saved in FinTrack.`,
+          route: "/productivity/focus",
+          ttl: 60 * 60,
+        });
+      } catch (pushError) {
+        console.error("Focus session push failed:", pushError?.message || pushError);
+      }
+    }
     return res.status(201).json({ message: "Focus session saved successfully.", session });
   } catch (error) {
     return sendError(res, error, "save");

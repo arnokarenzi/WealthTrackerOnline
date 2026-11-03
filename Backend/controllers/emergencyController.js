@@ -1,4 +1,5 @@
 import { pool } from "../models/MonthlyBudget.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 const DEFAULT_EMERGENCY_TARGET = 1000000;
 
@@ -164,6 +165,18 @@ export const depositEmergencyFund = async (req, res) => {
     );
 
     await connection.commit();
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `emergency-reserve-deposit-${Date.now()}-${Math.round(depositAmount * 100)}`,
+        title: "Emergency reserve funded",
+        body: `${depositAmount.toLocaleString("en-US")} RWF was moved from your wallet into your Emergency Reserve.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Emergency reserve deposit push failed:", pushError?.message || pushError);
+    }
 
     res.json({
       message: `${depositAmount.toLocaleString()} RWF transferred from Wallet to Emergency Reserve.`,
@@ -316,6 +329,18 @@ export const claimPendingEmergency = async (req, res) => {
     );
 
     await connection.commit();
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `emergency-reserve-snapshot-deposit-${Date.now()}-${Math.round(totalAmount * 100)}`,
+        title: "Emergency allocation deposited",
+        body: `${totalAmount.toLocaleString("en-US")} RWF from your pending allocation was transferred into your Emergency Reserve.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Emergency allocation push failed:", pushError?.message || pushError);
+    }
 
     res.json({
       message: `${totalAmount.toLocaleString()} RWF transferred from Wallet to Emergency Reserve.`,
@@ -378,6 +403,18 @@ export const deployEmergencyFund = async (req, res) => {
     } catch (_) {}
 
     await connection.commit();
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `emergency-reserve-deployed-${Date.now()}-${Math.round(deployAmount * 100)}`,
+        title: "Emergency funds moved to wallet",
+        body: `${deployAmount.toLocaleString("en-US")} RWF was moved from your Emergency Reserve back to your wallet.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Emergency reserve deployment push failed:", pushError?.message || pushError);
+    }
     res.json({ message: "Emergency funds deployed to wallet successfully!" });
   } catch (err) {
     try { await connection.rollback(); } catch (_) {}

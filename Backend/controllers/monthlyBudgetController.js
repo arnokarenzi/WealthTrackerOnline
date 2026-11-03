@@ -1,4 +1,5 @@
 import { pool } from "../models/MonthlyBudget.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 import { getKigaliTime, getKigaliDateRangeUtc } from "../utils/kigaliTime.js";
 
 const n = (val) => {
@@ -121,12 +122,24 @@ export const addExtraIncome = async (req, res) => {
       [numAmount, numAmount],
     );
 
-    await connection.query(
+    const [incomeResult] = await connection.query(
       "INSERT INTO WalletIncome (amount, description, source_type) VALUES (?, ?, 'side_income')",
       [numAmount, incomeDesc],
     );
 
     await connection.commit();
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `extra-income-recorded-${incomeResult.insertId}`,
+        title: "Income recorded",
+        body: `${numAmount.toLocaleString("en-US")} RWF from ${incomeDesc} was added to your FinTrack wallet.`,
+        route: "/",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Extra-income activity push failed:", pushError?.message || pushError);
+    }
     res.status(200).json({
       message: "Extra income added! Allocations updated live.",
       amount: numAmount,

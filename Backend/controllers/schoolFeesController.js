@@ -1,6 +1,7 @@
 import SchoolFees from "../models/SchoolFees.js";
 import { pool } from "../models/MonthlyBudget.js";
 import { getKigaliTime } from "../utils/kigaliTime.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 const ensureSchoolFeesSchema = async () => {
   try {
@@ -81,16 +82,32 @@ export const addSchoolFees = async (req, res) => {
       [currentMonth],
     );
 
+    let recordId;
     if (existing.length > 0) {
+      recordId = existing[0].id;
       await pool.query(
         "UPDATE SchoolFees SET amountSaved = ?, cumulative = ? WHERE id = ?",
-        [numAmount, numAmount, existing[0].id],
+        [numAmount, numAmount, recordId],
       );
     } else {
-      await pool.query(
+      const [inserted] = await pool.query(
         "INSERT INTO SchoolFees (month, amountSaved, cumulative) VALUES (?, ?, ?)",
         [currentMonth, numAmount, numAmount],
       );
+      recordId = inserted.insertId;
+    }
+
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `school-fees-progress-${recordId}-${Date.now()}`,
+        title: "School-fee savings updated",
+        body: `Your saved school-fee amount is now ${numAmount.toLocaleString("en-US")} RWF.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("School-fee progress push failed:", pushError?.message || pushError);
     }
 
     res

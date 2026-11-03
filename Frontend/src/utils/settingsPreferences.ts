@@ -11,6 +11,17 @@ export interface NotificationCategoryPreferences {
   leaderboard: boolean;
   /** Budget alerts shown in the in-app notification menu. */
   budgetAlerts: boolean;
+  financialActivity: boolean;
+  incomeReminders: boolean;
+  billReminders: boolean;
+  debtReminders: boolean;
+  taskReminders: boolean;
+  calendarReminders: boolean;
+  habitReminders: boolean;
+  goalReminders: boolean;
+  countdownReminders: boolean;
+  focusTimer: boolean;
+  reviewReminders: boolean;
 }
 
 export interface LocalSettingsPreferences {
@@ -36,6 +47,17 @@ export const DEFAULT_SETTINGS_PREFERENCES: LocalSettingsPreferences = {
     dailyTarget: true,
     leaderboard: true,
     budgetAlerts: true,
+    financialActivity: true,
+    incomeReminders: true,
+    billReminders: true,
+    debtReminders: true,
+    taskReminders: true,
+    calendarReminders: true,
+    habitReminders: true,
+    goalReminders: true,
+    countdownReminders: true,
+    focusTimer: true,
+    reviewReminders: true,
   },
 };
 
@@ -83,6 +105,17 @@ export const normalizeLocalSettingsPreferences = (
       dailyTarget: typeof rawNotifications.dailyTarget === "boolean" ? rawNotifications.dailyTarget : true,
       leaderboard: typeof rawNotifications.leaderboard === "boolean" ? rawNotifications.leaderboard : true,
       budgetAlerts: typeof rawNotifications.budgetAlerts === "boolean" ? rawNotifications.budgetAlerts : true,
+      financialActivity: typeof rawNotifications.financialActivity === "boolean" ? rawNotifications.financialActivity : true,
+      incomeReminders: typeof rawNotifications.incomeReminders === "boolean" ? rawNotifications.incomeReminders : true,
+      billReminders: typeof rawNotifications.billReminders === "boolean" ? rawNotifications.billReminders : true,
+      debtReminders: typeof rawNotifications.debtReminders === "boolean" ? rawNotifications.debtReminders : true,
+      taskReminders: typeof rawNotifications.taskReminders === "boolean" ? rawNotifications.taskReminders : true,
+      calendarReminders: typeof rawNotifications.calendarReminders === "boolean" ? rawNotifications.calendarReminders : true,
+      habitReminders: typeof rawNotifications.habitReminders === "boolean" ? rawNotifications.habitReminders : true,
+      goalReminders: typeof rawNotifications.goalReminders === "boolean" ? rawNotifications.goalReminders : true,
+      countdownReminders: typeof rawNotifications.countdownReminders === "boolean" ? rawNotifications.countdownReminders : true,
+      focusTimer: typeof rawNotifications.focusTimer === "boolean" ? rawNotifications.focusTimer : true,
+      reviewReminders: typeof rawNotifications.reviewReminders === "boolean" ? rawNotifications.reviewReminders : true,
     },
   };
 };

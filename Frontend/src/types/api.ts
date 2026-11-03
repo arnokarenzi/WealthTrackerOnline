@@ -398,6 +398,17 @@ export interface SettingsPayload {
       dailyTarget: boolean;
       leaderboard: boolean;
       budgetAlerts: boolean;
+      financialActivity: boolean;
+      incomeReminders: boolean;
+      billReminders: boolean;
+      debtReminders: boolean;
+      taskReminders: boolean;
+      calendarReminders: boolean;
+      habitReminders: boolean;
+      goalReminders: boolean;
+      countdownReminders: boolean;
+      focusTimer: boolean;
+      reviewReminders: boolean;
     };
   };
   updatedAt?: string;

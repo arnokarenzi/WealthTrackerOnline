@@ -139,7 +139,7 @@ export const financeApi = {
 
   sendTestPushNotification: async (
     subscription: PushSubscriptionJSON,
-    kind: "morning" | "midday" | "evening" | "target" | "friend-portal",
+    kind: "morning" | "midday" | "evening" | "target" | "friend-portal" | "app",
   ): Promise<{
     ok: boolean;
     test: boolean;

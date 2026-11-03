@@ -1,4 +1,5 @@
 import { sendFriendPortalShiftTargetReachedNotification } from "../services/pushService.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 import {
   claimFriendPortalPayout,
   deleteFriendPortalDailyLetters,
@@ -167,6 +168,18 @@ export const claimFriendPortalPayoutController = async (req, res) => {
       return res.status(404).json({
         error: "Friend-portal payout not found or already deposited.",
       });
+    }
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `friend-portal-payout-deposited-${id}`,
+        title: "Friend Portal payment deposited",
+        body: `${Number(result.collectedAmount || 0).toLocaleString("en-US")} RWF was confirmed and deposited into your FinTrack wallet.`,
+        route: "/",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Friend Portal payout push failed:", pushError?.message || pushError);
     }
     return res.json({
       message: "Friend-portal payment confirmed and added to your wallet.",

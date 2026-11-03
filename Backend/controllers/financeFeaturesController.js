@@ -8,6 +8,7 @@ import {
   roundMoney,
 } from "../utils/featureMath.js";
 import { getDailyPacingStatus } from "../services/dailyLetterService.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 const DEFAULT_PREFERENCES = {
   dateFormat: "dd/MM/yyyy",
@@ -19,6 +20,17 @@ const DEFAULT_PREFERENCES = {
     dailyTarget: true,
     leaderboard: true,
     budgetAlerts: true,
+    financialActivity: true,
+    incomeReminders: true,
+    billReminders: true,
+    debtReminders: true,
+    taskReminders: true,
+    calendarReminders: true,
+    habitReminders: true,
+    goalReminders: true,
+    countdownReminders: true,
+    focusTimer: true,
+    reviewReminders: true,
   },
 };
 const MONEY_EPSILON = 0.00001;
@@ -121,6 +133,17 @@ function normalizedPreferences(value) {
         typeof rawNotifications.budgetAlerts === "boolean"
           ? rawNotifications.budgetAlerts
           : true,
+      financialActivity: typeof rawNotifications.financialActivity === "boolean" ? rawNotifications.financialActivity : true,
+      billReminders: typeof rawNotifications.billReminders === "boolean" ? rawNotifications.billReminders : true,
+      debtReminders: typeof rawNotifications.debtReminders === "boolean" ? rawNotifications.debtReminders : true,
+      taskReminders: typeof rawNotifications.taskReminders === "boolean" ? rawNotifications.taskReminders : true,
+      calendarReminders: typeof rawNotifications.calendarReminders === "boolean" ? rawNotifications.calendarReminders : true,
+      habitReminders: typeof rawNotifications.habitReminders === "boolean" ? rawNotifications.habitReminders : true,
+      goalReminders: typeof rawNotifications.goalReminders === "boolean" ? rawNotifications.goalReminders : true,
+      countdownReminders: typeof rawNotifications.countdownReminders === "boolean" ? rawNotifications.countdownReminders : true,
+      focusTimer: typeof rawNotifications.focusTimer === "boolean" ? rawNotifications.focusTimer : true,
+      incomeReminders: typeof rawNotifications.incomeReminders === "boolean" ? rawNotifications.incomeReminders : true,
+      reviewReminders: typeof rawNotifications.reviewReminders === "boolean" ? rawNotifications.reviewReminders : true,
     },
   };
 }
@@ -712,6 +735,18 @@ export const recordBillPayment = async (req, res) => {
     const [[updated]] = await pool.query("SELECT * FROM Bills WHERE id=?", [
       id,
     ]);
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `bill-payment-${requestId}`,
+        title: "Bill payment recorded",
+        body: `${bill.bill_name}: ${roundMoney(bill.amount).toLocaleString("en-US")} RWF was marked paid in FinTrack.`,
+        route: "/bills",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Bill payment push failed:", pushError?.message || pushError);
+    }
     return res
       .status(201)
       .json({ message: "Bill payment recorded.", bill: billView(updated) });
@@ -1166,6 +1201,18 @@ export const recordDebtPayment = async (req, res) => {
     const [[updated]] = await pool.query("SELECT * FROM Debts WHERE id=?", [
       id,
     ]);
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `debt-payment-${requestId}`,
+        title: "Debt repayment recorded",
+        body: `${paymentAmount.toLocaleString("en-US")} RWF was recorded for ${debt.creditor}. Remaining balance: ${newBalance.toLocaleString("en-US")} RWF.`,
+        route: "/debt",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Debt payment push failed:", pushError?.message || pushError);
+    }
     return res
       .status(201)
       .json({

@@ -3,6 +3,7 @@ import {
   getMilestoneById, listGoalMilestones, listGoals, updateGoal, updateGoalMilestone,
 } from "../../services/productivity/productivityGoalsService.js";
 import { isValidPlanningDate, isValidPlanningId, validateGoalInput, validateMilestoneInput } from "../../utils/productivityPlanningValidation.js";
+import { sendCategoryPushNotification } from "../../services/appPushNotificationService.js";
 
 const sendError = (res, error, operation) => {
   if (error?.code === "ER_NO_SUCH_TABLE") return res.status(503).json({
@@ -53,6 +54,20 @@ export const updateProductivityGoalController = async (req, res) => {
     const targetDate = Object.hasOwn(validation.values, "targetDate") ? validation.values.targetDate : existing.targetDate;
     if (startDate && targetDate && targetDate < startDate) return res.status(400).json({ error: "targetDate cannot be earlier than startDate." });
     const goal = await updateGoal(existing.id, validation.values);
+    if (validation.values.status === "completed" && existing.status !== "completed") {
+      try {
+        await sendCategoryPushNotification({
+          category: "goalReminders",
+          eventKey: `goal-completed-${existing.id}`,
+          title: "Personal goal completed",
+          body: `Congratulations! You completed “${goal.name}”.`,
+          route: "/productivity/goals",
+          ttl: 60 * 60,
+        });
+      } catch (pushError) {
+        console.error("Goal completion push failed:", pushError?.message || pushError);
+      }
+    }
     return res.json({ message: "Goal updated successfully.", goal });
   } catch (error) { return sendError(res, error, "update"); }
 };
@@ -95,6 +110,20 @@ export const updateProductivityMilestoneController = async (req, res) => {
     const existing = await getMilestoneById(Number(req.params.id));
     if (!existing) return res.status(404).json({ error: "Milestone not found." });
     const milestone = await updateGoalMilestone(existing.id, validation.values);
+    if (validation.values.isCompleted === true && !existing.isCompleted) {
+      try {
+        await sendCategoryPushNotification({
+          category: "goalReminders",
+          eventKey: `milestone-completed-${existing.id}`,
+          title: "Goal milestone completed",
+          body: `You completed the milestone “${milestone.title}”.`,
+          route: "/productivity/goals",
+          ttl: 60 * 60,
+        });
+      } catch (pushError) {
+        console.error("Milestone completion push failed:", pushError?.message || pushError);
+      }
+    }
     return res.json({ message: "Milestone updated successfully.", milestone });
   } catch (error) { return sendError(res, error, "update milestone"); }
 };

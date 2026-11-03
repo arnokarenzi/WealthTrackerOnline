@@ -5,11 +5,24 @@ const SETTINGS_DB_VERSION = 1;
 const SETTINGS_STORE = "preferences";
 const NOTIFICATION_PREFERENCES_KEY = "notificationCategories";
 
-function notificationCategoryForTag(tag) {
+function notificationCategoryForTag(tag, explicitCategory) {
+  if (typeof explicitCategory === "string" && explicitCategory) return explicitCategory;
   if (tag.startsWith("shift-pacing-") || tag.startsWith("test-shift-pacing-")) return "shiftPacing";
   if (tag.startsWith("friend-portal-pacing-") || tag.startsWith("test-friend-portal-pacing-")) return "friendPortalPacing";
   if (tag.startsWith("daily-target-complete") || tag.startsWith("test-daily-target-complete")) return "dailyTarget";
   if (tag.startsWith("leaderboard-rank-")) return "leaderboard";
+  if (tag.startsWith("app-financialActivity-")) return "financialActivity";
+  if (tag.startsWith("app-incomeReminders-")) return "incomeReminders";
+  if (tag.startsWith("app-billReminders-")) return "billReminders";
+  if (tag.startsWith("app-debtReminders-")) return "debtReminders";
+  if (tag.startsWith("app-taskReminders-")) return "taskReminders";
+  if (tag.startsWith("app-calendarReminders-")) return "calendarReminders";
+  if (tag.startsWith("app-habitReminders-")) return "habitReminders";
+  if (tag.startsWith("app-goalReminders-")) return "goalReminders";
+  if (tag.startsWith("app-countdownReminders-")) return "countdownReminders";
+  if (tag.startsWith("app-focusTimer-")) return "focusTimer";
+  if (tag.startsWith("app-budgetAlerts-")) return "budgetAlerts";
+  if (tag.startsWith("app-reviewReminders-")) return "reviewReminders";
   return null;
 }
 
@@ -55,8 +68,8 @@ function readNotificationPreferences() {
   });
 }
 
-async function shouldShowPushForTag(tag) {
-  const category = notificationCategoryForTag(tag);
+async function shouldShowPushForTag(tag, explicitCategory) {
+  const category = notificationCategoryForTag(tag, explicitCategory);
   if (!category) return true;
   const preferences = await readNotificationPreferences();
   // Do not suppress notifications merely because IndexedDB is unavailable or
@@ -101,13 +114,14 @@ self.addEventListener("push", (event) => {
       const targetUrl =
         data.url || declared.navigate || data.navigate || self.registration.scope;
       const tag = data.type || declared.tag || data.tag || "fintrack-notification";
+      const category = data.category || declared.category || null;
 
-      if (!(await shouldShowPushForTag(String(tag)))) return;
+      if (!(await shouldShowPushForTag(String(tag), category))) return;
 
       const options = {
         body,
         tag,
-        renotify: Boolean(data.renotify ?? declared.renotify ?? false),
+        renotify: Boolean(data.renotify ?? declared.renotify ?? data.data?.renotify ?? false),
         data: {
           ...(declared.data && typeof declared.data === "object"
             ? declared.data

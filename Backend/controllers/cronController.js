@@ -3,6 +3,7 @@ import {
   sendDiagnosticPushNotification,
 } from "../services/pushService.js";
 import { getKigaliTime } from "../services/dailyLetterService.js";
+import { runScheduledAppNotifications } from "../services/scheduledNotificationService.js";
 
 const authenticateCronRequest = (req, res) => {
   const configuredSecret = process.env.CRON_SECRET;
@@ -55,6 +56,30 @@ export const runShiftPacingCron = async (req, res) => {
           : error instanceof Error
             ? error.message
             : String(error),
+    });
+  }
+};
+
+
+/**
+ * Authenticated unified reminder scheduler. Configure an external scheduler
+ * to POST this endpoint every five minutes using X-Cron-Secret. The service
+ * deduplicates each event, so retries do not create repeated pushes.
+ */
+export const runAppNotificationsCron = async (req, res) => {
+  if (!authenticateCronRequest(req, res)) return;
+  try {
+    const result = await runScheduledAppNotifications();
+    console.log("[APP NOTIFICATIONS CRON] Scheduler result:", JSON.stringify(result));
+    return res.status(200).json({ ok: true, result });
+  } catch (error) {
+    console.error("Unified notification cron failed:", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Unified notification scheduler failed.",
+      message: process.env.NODE_ENV === "production"
+        ? undefined
+        : error instanceof Error ? error.message : String(error),
     });
   }
 };

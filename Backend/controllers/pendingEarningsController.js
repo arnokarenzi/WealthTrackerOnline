@@ -1,5 +1,6 @@
 // pendingEarningsController.js
 import { pool } from "../models/MonthlyBudget.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 // Fetch all uncollected shift earnings
 export const getPendingEarnings = async (req, res) => {
@@ -57,6 +58,19 @@ export const claimPendingEarning = async (req, res) => {
 
     await connection.commit();
     connection.release();
+
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `personal-shift-payout-${id}`,
+        title: "Personal portal salary deposited",
+        body: `${payoutAmount.toLocaleString("en-US")} RWF from ${earning.description || "your previous shift"} was deposited into your FinTrack wallet.`,
+        route: "/",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Personal shift payout push failed:", pushError?.message || pushError);
+    }
 
     res.status(200).json({
       message: "Payout checked off successfully and added to wallet balance!",

@@ -43,6 +43,25 @@ import {
 
 type Feedback = { severity: "success" | "error" | "warning" | "info"; message: string };
 
+const notificationRows: { key: keyof LocalSettingsPreferences["notifications"]; label: string; description: string }[] = [
+  { key: "shiftPacing", label: "Personal portal shift pacing", description: "Scheduled 08:00, 12:00 and 18:00 Kigali-time reminders for your 750-letter shift target." },
+  { key: "friendPortalPacing", label: "Friend Portal shift pacing", description: "The same scheduled checks for your friend's separate 450-letter shift target, including progress and remaining pace." },
+  { key: "dailyTarget", label: "Personal daily target completion", description: "Push when your frozen daily personal-letter target is reached." },
+  { key: "leaderboard", label: "Leaderboard improvements", description: "Push when your leaderboard position improves." },
+  { key: "financialActivity", label: "Wallet and financial activity", description: "Confirmations when a salary or Friend Portal payout is actually deposited, and selected completed financial actions." },
+  { key: "incomeReminders", label: "Expected shift income reminders", description: "Reminders around your 13th/14th-day personal salary window and your friend's next-day transfer window. These are reminders, not confirmations of receipt." },
+  { key: "billReminders", label: "Bill reminders", description: "Reminders for enabled unpaid bills due soon or overdue." },
+  { key: "debtReminders", label: "Debt reminders", description: "Reminders for active debt payments due soon or overdue." },
+  { key: "budgetAlerts", label: "Budget threshold alerts", description: "Push when essentials spending reaches your warning or critical threshold; notices also remain in the in-app notification menu." },
+  { key: "taskReminders", label: "Task reminders", description: "A daily My Day summary and alerts shortly before timed tasks are due." },
+  { key: "calendarReminders", label: "Calendar reminders", description: "Push reminders shortly before scheduled calendar events." },
+  { key: "habitReminders", label: "Habit reminders", description: "A morning reminder for habits scheduled today that are not yet logged complete." },
+  { key: "goalReminders", label: "Goal and milestone reminders", description: "Reminders for milestones due today or overdue, plus milestone completion messages." },
+  { key: "countdownReminders", label: "Countdown reminders", description: "Reminders 7 days, 1 day and on the day of an upcoming countdown event." },
+  { key: "focusTimer", label: "Focus timer notifications", description: "A push confirmation when a completed focus or break session is saved. The active browser timer itself still needs the page to remain running." },
+  { key: "reviewReminders", label: "Daily and weekly review reminders", description: "Reminders to save your daily reflection and weekly review." },
+];
+
 const readLocalNotesForExport = (): unknown[] => {
   try {
     const raw = window.localStorage.getItem("fintrack-personal-notes-v1");
@@ -474,34 +493,17 @@ export default function Settings() {
             <Typography variant="h4">Notification categories</Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Category preferences and thresholds are persisted by the backend. Push-category values are also mirrored to this browser’s service-worker storage; budget alerts are shown in the in-app notification menu.
+            Category preferences and thresholds are persisted by the backend. Push-category values are also mirrored to this device’s service-worker storage so notifications can be filtered even when FinTrack is closed.
           </Typography>
           <Stack divider={<Divider flexItem />} spacing={0}>
-            <FormControlLabel
-              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
-              control={<Switch checked={preferences.notifications.shiftPacing} onChange={(event) => updateNotificationPreference("shiftPacing", event.target.checked)} />}
-              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Shift pacing reminders</Typography><Typography variant="body2" color="text.secondary">The scheduled 08:00, 12:00 and 18:00 Kigali-time push reminders.</Typography></Box>}
-            />
-            <FormControlLabel
-              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
-              control={<Switch checked={preferences.notifications.friendPortalPacing} onChange={(event) => updateNotificationPreference("friendPortalPacing", event.target.checked)} />}
-              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Friend Portal shift pacing reminders</Typography><Typography variant="body2" color="text.secondary">The same 08:00, 12:00 and 18:00 Kigali-time iPhone alerts, showing your friend's 450-letter shift progress, letters remaining and required daily pace.</Typography></Box>}
-            />
-            <FormControlLabel
-              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
-              control={<Switch checked={preferences.notifications.dailyTarget} onChange={(event) => updateNotificationPreference("dailyTarget", event.target.checked)} />}
-              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Daily target completion</Typography><Typography variant="body2" color="text.secondary">A push notification when today’s frozen letter target has been reached.</Typography></Box>}
-            />
-            <FormControlLabel
-              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
-              control={<Switch checked={preferences.notifications.leaderboard} onChange={(event) => updateNotificationPreference("leaderboard", event.target.checked)} />}
-              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Leaderboard improvements</Typography><Typography variant="body2" color="text.secondary">Push notifications when a leaderboard position improves.</Typography></Box>}
-            />
-            <FormControlLabel
-              sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
-              control={<Switch checked={preferences.notifications.budgetAlerts} onChange={(event) => updateNotificationPreference("budgetAlerts", event.target.checked)} />}
-              label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>Budget alerts in the app</Typography><Typography variant="body2" color="text.secondary">Show budget threshold warnings and status in the top-bar notification menu.</Typography></Box>}
-            />
+            {notificationRows.map((row) => (
+              <FormControlLabel
+                key={row.key}
+                sx={{ py: 0.75, alignItems: "flex-start", mx: 0 }}
+                control={<Switch checked={preferences.notifications[row.key]} onChange={(event) => updateNotificationPreference(row.key, event.target.checked)} />}
+                label={<Box sx={{ pt: 0.5 }}><Typography fontWeight={700}>{row.label}</Typography><Typography variant="body2" color="text.secondary">{row.description}</Typography></Box>}
+              />
+            ))}
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }} alignItems={{ xs: "stretch", sm: "center" }}>
             <Button variant="contained" onClick={() => void handleSavePreferences()} disabled={settingsLoading || Boolean(settingsLoadError)}>Save preferences</Button>

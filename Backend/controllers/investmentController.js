@@ -1,6 +1,7 @@
 import ActualInvestments from "../models/ActualInvestments.js";
 import { pool } from "../models/MonthlyBudget.js";
 import { getKigaliTime } from "../utils/kigaliTime.js";
+import { sendCategoryPushNotification } from "../services/appPushNotificationService.js";
 
 const ensureInvestmentReserveSchema = async () => {
   try {
@@ -41,6 +42,18 @@ export const createInvestment = async (req, res) => {
       month,
       year,
     );
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `investment-created-${result.insertId}`,
+        title: "Investment recorded",
+        body: `${asset_name} was added to your investment records with ${Number(principal_invested || 0).toLocaleString("en-US")} RWF invested.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Investment activity push failed:", pushError?.message || pushError);
+    }
     res.status(201).json({
       message: "Investment recorded successfully!",
       id: result.insertId,
@@ -55,6 +68,18 @@ export const updateValuation = async (req, res) => {
   const { current_value } = req.body;
   try {
     await ActualInvestments.updateValue(id, current_value);
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `investment-valuation-updated-${id}-${Date.now()}`,
+        title: "Investment valuation updated",
+        body: `The saved valuation for investment #${id} was updated to ${Number(current_value || 0).toLocaleString("en-US")} RWF.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Investment valuation push failed:", pushError?.message || pushError);
+    }
     res.json({ message: "Asset valuation updated successfully!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -109,6 +134,21 @@ export const deleteInvestment = async (req, res) => {
     }
 
     await connection.commit();
+
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `investment-deleted-${id}`,
+        title: "Investment record removed",
+        body: refundedAmount > 0
+          ? `${refundedAmount.toLocaleString("en-US")} RWF principal was refunded to your Investment Reserve.`
+          : "An investment record was removed from FinTrack.",
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Investment removal push failed:", pushError?.message || pushError);
+    }
 
     res.json({
       message:
@@ -260,6 +300,19 @@ export const deployReserve = async (req, res) => {
     );
 
     await connection.commit();
+
+    try {
+      await sendCategoryPushNotification({
+        category: "financialActivity",
+        eventKey: `investment-deployed-${result.insertId}`,
+        title: "Investment reserve deployed",
+        body: `${numAmount.toLocaleString("en-US")} RWF was moved from your Investment Reserve into ${asset_name}.`,
+        route: "/investments",
+        ttl: 60 * 60,
+      });
+    } catch (pushError) {
+      console.error("Investment deployment push failed:", pushError?.message || pushError);
+    }
 
     res.status(201).json({
       message:
